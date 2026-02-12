@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 品質チェック
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: 依存関係インストール
+        run: npm ci
+
+      - name: TypeScript 型チェック
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier フォーマットチェック
+        run: npm run format:check
+
+      - name: テスト
+        run: npm run test
+
+      - name: ビルド
+        run: npm run build
