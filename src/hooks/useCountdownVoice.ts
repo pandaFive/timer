@@ -55,8 +55,14 @@ export function useCountdownVoice(): UseCountdownVoiceReturn {
       return;
     }
 
-    speechSynthesis.cancel();
+    // 一部ブラウザでcancel()がthrowする可能性がある
+    try {
+      speechSynthesis.cancel();
+    } catch (e) {
+      console.warn('speechSynthesis.cancel() failed:', e);
+    }
 
+    // secondsLeft は 3 | 2 | 1 に制限されているため、JAPANESE_NUMBERS[secondsLeft] は必ず存在する
     const jaVoice = jaVoiceRef.current;
     const text = jaVoice ? JAPANESE_NUMBERS[secondsLeft]! : String(secondsLeft);
 
@@ -68,7 +74,11 @@ export function useCountdownVoice(): UseCountdownVoiceReturn {
 
     // 発話失敗時のビープフォールバック
     utterance.onerror = () => {
-      playBeep(BEEP_FREQUENCIES[secondsLeft], 0.15);
+      try {
+        playBeep(BEEP_FREQUENCIES[secondsLeft], 0.15);
+      } catch (e) {
+        console.warn('ビープフォールバックも失敗しました:', e);
+      }
     };
 
     speechSynthesis.speak(utterance);

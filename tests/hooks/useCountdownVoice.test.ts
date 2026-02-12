@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCountdownVoice } from '../../src/hooks/useCountdownVoice';
+import { playBeep } from '../../src/utils/beep';
+
+vi.mock('../../src/utils/beep', () => ({
+  playBeep: vi.fn(),
+}));
+
+const mockPlayBeep = vi.mocked(playBeep);
 
 describe('useCountdownVoice', () => {
   let mockSpeak: ReturnType<typeof vi.fn>;
@@ -59,28 +66,7 @@ describe('useCountdownVoice', () => {
       }),
     );
 
-    // AudioContextモック
-    vi.stubGlobal(
-      'AudioContext',
-      vi.fn(() => ({
-        createOscillator: vi.fn(() => ({
-          type: '',
-          connect: vi.fn(),
-          start: vi.fn(),
-          stop: vi.fn(),
-          frequency: { setValueAtTime: vi.fn() },
-        })),
-        createGain: vi.fn(() => ({
-          connect: vi.fn(),
-          gain: {
-            setValueAtTime: vi.fn(),
-            exponentialRampToValueAtTime: vi.fn(),
-          },
-        })),
-        currentTime: 0,
-        destination: 'dest',
-      })),
-    );
+    mockPlayBeep.mockClear();
   });
 
   afterEach(() => {
@@ -153,8 +139,8 @@ describe('useCountdownVoice', () => {
       });
     }).not.toThrow();
 
-    // AudioContextが使用される
-    expect(AudioContext).toHaveBeenCalled();
+    // ビープ音にフォールバック
+    expect(mockPlayBeep).toHaveBeenCalled();
   });
 
   it('voiceschangedイベントで音声リストを更新する', () => {
@@ -209,6 +195,6 @@ describe('useCountdownVoice', () => {
     });
 
     // ビープ音にフォールバック
-    expect(AudioContext).toHaveBeenCalled();
+    expect(mockPlayBeep).toHaveBeenCalled();
   });
 });

@@ -183,7 +183,7 @@ describe('useYouTubePlayer', () => {
       result.current.loadAndPlay('testVideoId');
     });
     await act(async () => {
-      triggerError(150);
+      triggerError(5);
     });
 
     expect(result.current.needsUserGesture).toBe(true);
@@ -200,7 +200,7 @@ describe('useYouTubePlayer', () => {
       result.current.loadAndPlay('testVideoId');
     });
     await act(async () => {
-      triggerError(150);
+      triggerError(5);
     });
     expect(result.current.needsUserGesture).toBe(true);
 

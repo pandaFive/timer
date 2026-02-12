@@ -1,7 +1,8 @@
-/** 秒数をMM:SS形式にフォーマット */
+/** 秒数をMM:SS形式にフォーマット（四捨五入による60秒オーバーフローを補正） */
 function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
+  const totalSeconds = Math.round(seconds);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 

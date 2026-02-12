@@ -206,6 +206,15 @@ function timerReducer(
         }
 
         const newEndAt = now + result.timeLeftMs;
+
+        // 現フェーズの経過分を差し引いて、前フェーズまでの累計を算出
+        const currentPhaseDurationMs =
+          (result.phase === 'workout'
+            ? state.config.workoutSeconds
+            : state.config.restSeconds) * 1000;
+        const timeSpentInCurrentPhase =
+          currentPhaseDurationMs - result.timeLeftMs;
+
         return {
           ...state,
           phase: result.phase,
@@ -214,16 +223,8 @@ function timerReducer(
           endAt: newEndAt,
           totalWorkoutTime: result.totalWorkout,
           totalRestTime: result.totalRest,
-          elapsedRunningMs:
-            newElapsed - result.timeLeftMs >= 0
-              ? newElapsed - result.timeLeftMs
-              : 0,
-          phaseStartedAt:
-            now -
-            ((result.phase === 'workout'
-              ? state.config.workoutSeconds * 1000
-              : state.config.restSeconds * 1000) -
-              result.timeLeftMs),
+          elapsedRunningMs: Math.max(0, newElapsed - timeSpentInCurrentPhase),
+          phaseStartedAt: now - timeSpentInCurrentPhase,
           lastAnnouncedSecond: 0,
         };
       }

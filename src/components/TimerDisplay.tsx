@@ -36,7 +36,7 @@ export function TimerDisplay({
   return (
     <div
       className={`timer-display ${phaseClass} ${countdownClass}`}
-      aria-live="assertive"
+      aria-live="polite"
       aria-label={`${PHASE_LABELS[phase]} ラウンド${currentRound}/${totalRounds} 残り${timeLeft}秒`}
     >
       <div className="timer-display__phase">{PHASE_LABELS[phase]}</div>

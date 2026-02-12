@@ -44,7 +44,8 @@ function loadConfig(): TimerConfig {
     };
 
     return config;
-  } catch {
+  } catch (e) {
+    console.warn('localStorage設定の読み込みに失敗しました:', e);
     return DEFAULT_CONFIG;
   }
 }
@@ -53,8 +54,8 @@ function loadConfig(): TimerConfig {
 function saveConfig(config: TimerConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  } catch {
-    // localStorage書き込み失敗は無視
+  } catch (e) {
+    console.warn('localStorage設定の保存に失敗しました:', e);
   }
 }
 
