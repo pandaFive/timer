@@ -39,7 +39,7 @@ function App() {
 
   /** フェーズ遷移コールバック */
   const onPhaseChange = useCallback(
-    (phase: Phase, _round: number) => {
+    (phase: Phase) => {
       const config = configRef.current;
       if (!config) return;
 

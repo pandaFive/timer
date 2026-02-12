@@ -336,8 +336,8 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
   const lastAnnouncedRef = useRef(0);
 
   // フェーズ遷移時のコールバック発火
+  const { phase, currentRound, timeLeft, isRunning } = internalState;
   useEffect(() => {
-    const { phase, currentRound } = internalState;
     if (phase !== prevPhaseRef.current || currentRound !== prevRoundRef.current) {
       if (phase !== 'idle' || prevPhaseRef.current !== 'idle') {
         onPhaseChangeRef.current?.(phase, currentRound);
@@ -347,11 +347,10 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
       prevPhaseRef.current = phase;
       prevRoundRef.current = currentRound;
     }
-  }, [internalState.phase, internalState.currentRound]);
+  }, [phase, currentRound]);
 
   // カウントダウンコールバック発火
   useEffect(() => {
-    const { timeLeft, isRunning, phase } = internalState;
     if (!isRunning || phase === 'idle' || phase === 'completed') return;
 
     if (timeLeft <= 3 && timeLeft >= 1) {
@@ -364,18 +363,18 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
       }
       lastAnnouncedRef.current = timeLeft;
     }
-  }, [internalState.timeLeft, internalState.isRunning, internalState.phase]);
+  }, [timeLeft, isRunning, phase]);
 
   // setInterval（200ms）でTICK発行
   useEffect(() => {
-    if (!internalState.isRunning) return;
+    if (!isRunning) return;
 
     const id = setInterval(() => {
       dispatch({ type: 'TICK' });
     }, 200);
 
     return () => clearInterval(id);
-  }, [internalState.isRunning]);
+  }, [isRunning]);
 
   // visibilitychange リスナー
   useEffect(() => {

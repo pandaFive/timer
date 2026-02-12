@@ -106,9 +106,8 @@ describe('useYouTubePlayer', () => {
     renderHook(() => useYouTubePlayer('test-player'));
 
     // script挿入は不要（YTが既にある）
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scriptCalls = appendChildSpy.mock.calls.filter(
-      (call: any[]) => (call[0] as HTMLElement)?.tagName === 'SCRIPT'
+      (call: unknown[]) => (call[0] as HTMLElement)?.tagName === 'SCRIPT'
     );
     expect(scriptCalls.length).toBe(0);
   });

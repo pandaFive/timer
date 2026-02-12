@@ -97,7 +97,7 @@ export function Controls({
       </div>
 
       <div className="controls__shortcuts">
-        Space: 一時停止/再開　→: スキップ　R: リセット
+        Space: 一時停止/再開 | →: スキップ | R: リセット
       </div>
     </div>
   );
