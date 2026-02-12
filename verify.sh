@@ -45,6 +45,7 @@ cleanup() {
     echo -e "${RED}${BOLD}  ステップ ${CURRENT_STEP}/${TOTAL_STEPS} で失敗 (${elapsed}秒)${RESET}" >&2
     echo -e "${RED}${BOLD}========================================${RESET}" >&2
   fi
+  exit "$exit_code"
 }
 trap cleanup EXIT
 
@@ -79,13 +80,13 @@ echo -e "${BOLD}========================================${RESET}"
 run_check 1 "TypeScript 型チェック" "型チェック完了" "型チェック失敗" \
   npx --no-install tsc --noEmit
 run_check 2 "ESLint" "Lint完了" "Lint失敗" \
-  npm run --silent lint
+  npm run --loglevel=warn lint
 run_check 3 "Prettier フォーマットチェック" "フォーマットチェック完了" "フォーマットチェック失敗（npm run format で修正可能）" \
-  npm run --silent format:check
+  npm run --loglevel=warn format:check
 run_check 4 "テスト" "テスト完了" "テスト失敗" \
-  npm run --silent test
+  npm run --loglevel=warn test
 run_check 5 "ビルド" "ビルド完了" "ビルド失敗" \
-  npx --no-install vite build
+  npm run --loglevel=warn build
 
 # --- サマリー ---
 END_TIME=$(date +%s)
