@@ -1,4 +1,4 @@
-/* グローバルスタイル - 後で実装 */
+/* === グローバル === */
 *,
 *::before,
 *::after {
@@ -18,4 +18,307 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+/* === App === */
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 1rem;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__title {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: #e0e0ff;
+}
+
+/* === Settings === */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings h2 {
+  font-size: 1.2rem;
+  color: #a0a0d0;
+}
+
+.settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.settings__field label {
+  font-size: 0.875rem;
+  color: #aaa;
+}
+
+.settings__field input {
+  padding: 0.625rem;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #2a2a4a;
+  color: #eee;
+  font-size: 1rem;
+}
+
+.settings__field input:focus {
+  outline: 2px solid #6c63ff;
+  border-color: transparent;
+}
+
+.settings__field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings__error {
+  color: #ff6b6b;
+  font-size: 0.8rem;
+}
+
+.settings__start-btn {
+  margin-top: 0.5rem;
+  padding: 0.875rem;
+  border: none;
+  border-radius: 12px;
+  background: #6c63ff;
+  color: #fff;
+  font-size: 1.125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.settings__start-btn:hover:not(:disabled) {
+  background: #5a52e0;
+}
+
+.settings__start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* === TimerDisplay === */
+.timer-display {
+  text-align: center;
+  padding: 2rem 1rem;
+  border-radius: 16px;
+  transition: background 0.3s;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 240px;
+}
+
+.timer-display--workout {
+  background: linear-gradient(135deg, #e63946 20%, #c62828 100%);
+}
+
+.timer-display--rest {
+  background: linear-gradient(135deg, #2a9d8f 20%, #1b7a6e 100%);
+}
+
+.timer-display--idle {
+  background: #2a2a4a;
+}
+
+.timer-display--completed {
+  background: linear-gradient(135deg, #6c63ff 20%, #5a52e0 100%);
+}
+
+.timer-display__phase {
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.timer-display__round {
+  font-size: 1rem;
+  opacity: 0.85;
+}
+
+.timer-display__time {
+  font-size: 5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* カウントダウンアニメーション */
+.timer-display--countdown {
+  animation: pulse 0.5s ease-in-out;
+}
+
+.timer-display--countdown .timer-display__time {
+  color: #ffd60a;
+  text-shadow: 0 0 20px rgba(255, 214, 10, 0.5);
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+/* === Controls === */
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.controls__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.controls__btn {
+  flex: 1;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.controls__btn:active {
+  transform: scale(0.97);
+}
+
+.controls__btn--toggle {
+  background: #3a3a5a;
+  color: #eee;
+}
+
+.controls__btn--toggle:hover {
+  background: #4a4a6a;
+}
+
+.controls__btn--skip {
+  background: #3a3a5a;
+  color: #eee;
+}
+
+.controls__btn--skip:hover {
+  background: #4a4a6a;
+}
+
+.controls__btn--reset {
+  background: #4a2a2a;
+  color: #ff9999;
+}
+
+.controls__btn--reset:hover {
+  background: #5a3030;
+}
+
+.controls__btn--gesture {
+  background: #ffd60a;
+  color: #1a1a2e;
+  font-weight: 600;
+  padding: 1rem;
+  font-size: 1.1rem;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.controls__shortcuts {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+/* === Summary === */
+.summary {
+  text-align: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.summary h2 {
+  font-size: 1.75rem;
+  color: #6c63ff;
+}
+
+.summary__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.summary__stat {
+  background: #2a2a4a;
+  padding: 1rem;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.summary__label {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.summary__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary__btn {
+  padding: 0.875rem;
+  border: none;
+  border-radius: 12px;
+  background: #6c63ff;
+  color: #fff;
+  font-size: 1.125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.summary__btn:hover {
+  background: #5a52e0;
+}
+
+/* === YouTubePlayer === */
+.youtube-player {
+  position: absolute;
+  left: -9999px;
+  width: 200px;
+  height: 200px;
+}
+
+/* === レスポンシブ === */
+@media (min-width: 600px) {
+  .app__title {
+    font-size: 2rem;
+  }
+
+  .timer-display__time {
+    font-size: 7rem;
+  }
+
+  .timer-display {
+    min-height: 300px;
+  }
 }
