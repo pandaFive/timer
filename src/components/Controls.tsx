@@ -15,7 +15,9 @@ interface ControlsProps {
 /** フォーム入力要素内かどうかを判定（キーボードショートカット誤発火防止） */
 function isInputElement(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
+  return !!target.closest(
+    'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+  );
 }
 
 export function Controls({

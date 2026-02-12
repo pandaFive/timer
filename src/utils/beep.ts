@@ -13,10 +13,7 @@ export function playBeep(frequency = 800, duration = 0.15): void {
   oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
 
   gain.gain.setValueAtTime(0.5, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(
-    0.01,
-    ctx.currentTime + duration,
-  );
+  gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
 
   oscillator.connect(gain);
   gain.connect(ctx.destination);

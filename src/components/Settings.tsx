@@ -25,11 +25,22 @@ function loadConfig(): TimerConfig {
 
     const obj = parsed as Record<string, unknown>;
     const config: TimerConfig = {
-      workoutSeconds: typeof obj.workoutSeconds === 'number' ? obj.workoutSeconds : DEFAULT_CONFIG.workoutSeconds,
-      restSeconds: typeof obj.restSeconds === 'number' ? obj.restSeconds : DEFAULT_CONFIG.restSeconds,
-      rounds: typeof obj.rounds === 'number' ? obj.rounds : DEFAULT_CONFIG.rounds,
-      workoutUrl: typeof obj.workoutUrl === 'string' ? obj.workoutUrl : DEFAULT_CONFIG.workoutUrl,
-      restUrl: typeof obj.restUrl === 'string' ? obj.restUrl : DEFAULT_CONFIG.restUrl,
+      workoutSeconds:
+        typeof obj.workoutSeconds === 'number'
+          ? obj.workoutSeconds
+          : DEFAULT_CONFIG.workoutSeconds,
+      restSeconds:
+        typeof obj.restSeconds === 'number'
+          ? obj.restSeconds
+          : DEFAULT_CONFIG.restSeconds,
+      rounds:
+        typeof obj.rounds === 'number' ? obj.rounds : DEFAULT_CONFIG.rounds,
+      workoutUrl:
+        typeof obj.workoutUrl === 'string'
+          ? obj.workoutUrl
+          : DEFAULT_CONFIG.workoutUrl,
+      restUrl:
+        typeof obj.restUrl === 'string' ? obj.restUrl : DEFAULT_CONFIG.restUrl,
     };
 
     return config;
@@ -51,13 +62,25 @@ function saveConfig(config: TimerConfig): void {
 function validate(config: TimerConfig): ValidationErrors {
   const errors: ValidationErrors = {};
 
-  if (config.workoutSeconds < 1 || config.workoutSeconds > 600 || !Number.isInteger(config.workoutSeconds)) {
+  if (
+    config.workoutSeconds < 1 ||
+    config.workoutSeconds > 600 ||
+    !Number.isInteger(config.workoutSeconds)
+  ) {
     errors.workoutSeconds = '1〜600の整数を入力してください';
   }
-  if (config.restSeconds < 1 || config.restSeconds > 600 || !Number.isInteger(config.restSeconds)) {
+  if (
+    config.restSeconds < 1 ||
+    config.restSeconds > 600 ||
+    !Number.isInteger(config.restSeconds)
+  ) {
     errors.restSeconds = '1〜600の整数を入力してください';
   }
-  if (config.rounds < 1 || config.rounds > 99 || !Number.isInteger(config.rounds)) {
+  if (
+    config.rounds < 1 ||
+    config.rounds > 99 ||
+    !Number.isInteger(config.rounds)
+  ) {
     errors.rounds = '1〜99の整数を入力してください';
   }
   if (config.workoutUrl && !extractVideoId(config.workoutUrl)) {
@@ -84,25 +107,31 @@ export function Settings({ disabled, onStart }: SettingsProps) {
     saveConfig(config);
   }, [config]);
 
-  const handleChange = useCallback((field: keyof TimerConfig, value: string) => {
-    setConfig((prev) => {
-      const numFields = ['workoutSeconds', 'restSeconds', 'rounds'] as const;
-      if ((numFields as readonly string[]).includes(field)) {
-        return { ...prev, [field]: parseInt(value, 10) || 0 };
+  const handleChange = useCallback(
+    (field: keyof TimerConfig, value: string) => {
+      setConfig((prev) => {
+        const numFields = ['workoutSeconds', 'restSeconds', 'rounds'] as const;
+        if ((numFields as readonly string[]).includes(field)) {
+          return { ...prev, [field]: parseInt(value, 10) || 0 };
+        }
+        return { ...prev, [field]: value };
+      });
+    },
+    [],
+  );
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const validationErrors = validate(config);
+      setErrors(validationErrors);
+
+      if (Object.keys(validationErrors).length === 0) {
+        onStart(config);
       }
-      return { ...prev, [field]: value };
-    });
-  }, []);
-
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    const validationErrors = validate(config);
-    setErrors(validationErrors);
-
-    if (Object.keys(validationErrors).length === 0) {
-      onStart(config);
-    }
-  }, [config, onStart]);
+    },
+    [config, onStart],
+  );
 
   return (
     <form className="settings" onSubmit={handleSubmit}>
@@ -119,7 +148,11 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           onChange={(e) => handleChange('workoutSeconds', e.target.value)}
           disabled={disabled}
         />
-        {errors.workoutSeconds && <span className="settings__error" role="alert">{errors.workoutSeconds}</span>}
+        {errors.workoutSeconds && (
+          <span className="settings__error" role="alert">
+            {errors.workoutSeconds}
+          </span>
+        )}
       </div>
 
       <div className="settings__field">
@@ -133,7 +166,11 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           onChange={(e) => handleChange('restSeconds', e.target.value)}
           disabled={disabled}
         />
-        {errors.restSeconds && <span className="settings__error" role="alert">{errors.restSeconds}</span>}
+        {errors.restSeconds && (
+          <span className="settings__error" role="alert">
+            {errors.restSeconds}
+          </span>
+        )}
       </div>
 
       <div className="settings__field">
@@ -147,7 +184,11 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           onChange={(e) => handleChange('rounds', e.target.value)}
           disabled={disabled}
         />
-        {errors.rounds && <span className="settings__error" role="alert">{errors.rounds}</span>}
+        {errors.rounds && (
+          <span className="settings__error" role="alert">
+            {errors.rounds}
+          </span>
+        )}
       </div>
 
       <div className="settings__field">
@@ -160,7 +201,11 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           onChange={(e) => handleChange('workoutUrl', e.target.value)}
           disabled={disabled}
         />
-        {errors.workoutUrl && <span className="settings__error" role="alert">{errors.workoutUrl}</span>}
+        {errors.workoutUrl && (
+          <span className="settings__error" role="alert">
+            {errors.workoutUrl}
+          </span>
+        )}
       </div>
 
       <div className="settings__field">
@@ -173,7 +218,11 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           onChange={(e) => handleChange('restUrl', e.target.value)}
           disabled={disabled}
         />
-        {errors.restUrl && <span className="settings__error" role="alert">{errors.restUrl}</span>}
+        {errors.restUrl && (
+          <span className="settings__error" role="alert">
+            {errors.restUrl}
+          </span>
+        )}
       </div>
 
       <button type="submit" disabled={disabled} className="settings__start-btn">

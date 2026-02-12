@@ -19,10 +19,12 @@ function setupGlobalMocks() {
   let onReadyCallback: (() => void) | undefined;
 
   vi.stubGlobal('YT', {
-    Player: vi.fn((_id: string, opts: { events?: { onReady?: () => void } }) => {
-      onReadyCallback = opts.events?.onReady;
-      return mockPlayer;
-    }),
+    Player: vi.fn(
+      (_id: string, opts: { events?: { onReady?: () => void } }) => {
+        onReadyCallback = opts.events?.onReady;
+        return mockPlayer;
+      },
+    ),
     PlayerState: {
       UNSTARTED: -1,
       ENDED: 0,
@@ -42,29 +44,38 @@ function setupGlobalMocks() {
     removeEventListener: vi.fn(),
   });
 
-  vi.stubGlobal('SpeechSynthesisUtterance', vi.fn((text: string) => ({
-    text,
-    lang: '',
-    voice: null,
-    onerror: null,
-  })));
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    vi.fn((text: string) => ({
+      text,
+      lang: '',
+      voice: null,
+      onerror: null,
+    })),
+  );
 
   // AudioContext モック
-  vi.stubGlobal('AudioContext', vi.fn(() => ({
-    createOscillator: vi.fn(() => ({
-      type: '',
-      connect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-      frequency: { setValueAtTime: vi.fn() },
+  vi.stubGlobal(
+    'AudioContext',
+    vi.fn(() => ({
+      createOscillator: vi.fn(() => ({
+        type: '',
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+        frequency: { setValueAtTime: vi.fn() },
+      })),
+      createGain: vi.fn(() => ({
+        connect: vi.fn(),
+        gain: {
+          setValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn(),
+        },
+      })),
+      currentTime: 0,
+      destination: 'dest',
     })),
-    createGain: vi.fn(() => ({
-      connect: vi.fn(),
-      gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-    })),
-    currentTime: 0,
-    destination: 'dest',
-  })));
+  );
 
   return {
     mockPlayer,
@@ -244,7 +255,9 @@ describe('App 統合テスト', () => {
 
     const urlInput = screen.getByLabelText('ワークアウト曲（YouTube URL）');
     await act(async () => {
-      fireEvent.change(urlInput, { target: { value: 'https://evil.com/watch?v=test' } });
+      fireEvent.change(urlInput, {
+        target: { value: 'https://evil.com/watch?v=test' },
+      });
     });
 
     const form = screen.getByText('スタート').closest('form')!;
@@ -252,7 +265,9 @@ describe('App 統合テスト', () => {
       fireEvent.submit(form);
     });
 
-    expect(screen.getByText('有効なYouTube URLを入力してください')).toBeInTheDocument();
+    expect(
+      screen.getByText('有効なYouTube URLを入力してください'),
+    ).toBeInTheDocument();
   });
 
   it('localStorage に設定が保存される', async () => {
@@ -276,7 +291,9 @@ describe('App 統合テスト', () => {
     render(<App />);
 
     // デフォルト値（30秒）が表示される
-    const workoutInput = screen.getByLabelText('ワークアウト（秒）') as HTMLInputElement;
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
     expect(workoutInput.value).toBe('30');
   });
 
@@ -285,7 +302,9 @@ describe('App 統合テスト', () => {
     setupGlobalMocks();
     render(<App />);
 
-    const workoutInput = screen.getByLabelText('ワークアウト（秒）') as HTMLInputElement;
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
     expect(workoutInput.value).toBe('30');
   });
 
@@ -312,7 +331,9 @@ describe('App 統合テスト', () => {
 
     const workoutUrl = screen.getByLabelText('ワークアウト曲（YouTube URL）');
     await act(async () => {
-      fireEvent.change(workoutUrl, { target: { value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' } });
+      fireEvent.change(workoutUrl, {
+        target: { value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+      });
     });
 
     await act(async () => {

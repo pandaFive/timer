@@ -62,14 +62,26 @@ function computeNextPhase(
   if (phase === 'workout') {
     if (currentRound >= config.rounds) {
       // 最終ラウンドのworkout完了 → completed
-      return { nextPhase: 'completed', nextRound: currentRound, nextDuration: 0 };
+      return {
+        nextPhase: 'completed',
+        nextRound: currentRound,
+        nextDuration: 0,
+      };
     }
     // rest phase
-    return { nextPhase: 'rest', nextRound: currentRound, nextDuration: config.restSeconds };
+    return {
+      nextPhase: 'rest',
+      nextRound: currentRound,
+      nextDuration: config.restSeconds,
+    };
   }
   if (phase === 'rest') {
     // 次のラウンドのworkout
-    return { nextPhase: 'workout', nextRound: currentRound + 1, nextDuration: config.workoutSeconds };
+    return {
+      nextPhase: 'workout',
+      nextRound: currentRound + 1,
+      nextDuration: config.workoutSeconds,
+    };
   }
   return { nextPhase: 'completed', nextRound: currentRound, nextDuration: 0 };
 }
@@ -139,7 +151,10 @@ function catchUp(
 }
 
 /** reducer本体 */
-function timerReducer(state: InternalState, action: TimerAction): InternalState {
+function timerReducer(
+  state: InternalState,
+  action: TimerAction,
+): InternalState {
   switch (action.type) {
     case 'START': {
       const now = Date.now();
@@ -171,8 +186,7 @@ function timerReducer(state: InternalState, action: TimerAction): InternalState 
             ? state.config.workoutSeconds
             : state.config.restSeconds;
         const newElapsed =
-          state.elapsedRunningMs +
-          (now - (state.endAt - phaseElapsed * 1000));
+          state.elapsedRunningMs + (now - (state.endAt - phaseElapsed * 1000));
 
         // catch-upで全体の位置を再計算
         const result = catchUp(newElapsed, state.config);
@@ -200,14 +214,16 @@ function timerReducer(state: InternalState, action: TimerAction): InternalState 
           endAt: newEndAt,
           totalWorkoutTime: result.totalWorkout,
           totalRestTime: result.totalRest,
-          elapsedRunningMs: newElapsed - result.timeLeftMs >= 0
-            ? newElapsed - result.timeLeftMs
-            : 0,
-          phaseStartedAt: now - (
-            (result.phase === 'workout'
+          elapsedRunningMs:
+            newElapsed - result.timeLeftMs >= 0
+              ? newElapsed - result.timeLeftMs
+              : 0,
+          phaseStartedAt:
+            now -
+            ((result.phase === 'workout'
               ? state.config.workoutSeconds * 1000
-              : state.config.restSeconds * 1000) - result.timeLeftMs
-          ),
+              : state.config.restSeconds * 1000) -
+              result.timeLeftMs),
           lastAnnouncedSecond: 0,
         };
       }
@@ -220,7 +236,11 @@ function timerReducer(state: InternalState, action: TimerAction): InternalState 
     }
 
     case 'PAUSE': {
-      if (!state.isRunning || state.phase === 'idle' || state.phase === 'completed') {
+      if (
+        !state.isRunning ||
+        state.phase === 'idle' ||
+        state.phase === 'completed'
+      ) {
         return state;
       }
       return {
@@ -231,7 +251,13 @@ function timerReducer(state: InternalState, action: TimerAction): InternalState 
     }
 
     case 'RESUME': {
-      if (state.isRunning || state.phase === 'idle' || state.phase === 'completed' || !state.pausedAt || !state.endAt) {
+      if (
+        state.isRunning ||
+        state.phase === 'idle' ||
+        state.phase === 'completed' ||
+        !state.pausedAt ||
+        !state.endAt
+      ) {
         return state;
       }
       const now = Date.now();
@@ -245,7 +271,11 @@ function timerReducer(state: InternalState, action: TimerAction): InternalState 
     }
 
     case 'SKIP': {
-      if (state.phase === 'idle' || state.phase === 'completed' || !state.config) {
+      if (
+        state.phase === 'idle' ||
+        state.phase === 'completed' ||
+        !state.config
+      ) {
         return state;
       }
       const now = Date.now();
@@ -321,7 +351,10 @@ function timerReducer(state: InternalState, action: TimerAction): InternalState 
 
 export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
   const { onCountdownTick, onPhaseChange } = options;
-  const [internalState, dispatch] = useReducer(timerReducer, initialInternalState);
+  const [internalState, dispatch] = useReducer(
+    timerReducer,
+    initialInternalState,
+  );
 
   // コールバックのref（レンダリング中のクロージャ問題を回避）
   const onCountdownTickRef = useRef(onCountdownTick);
@@ -338,7 +371,10 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
   // フェーズ遷移時のコールバック発火
   const { phase, currentRound, timeLeft, isRunning } = internalState;
   useEffect(() => {
-    if (phase !== prevPhaseRef.current || currentRound !== prevRoundRef.current) {
+    if (
+      phase !== prevPhaseRef.current ||
+      currentRound !== prevRoundRef.current
+    ) {
       if (phase !== 'idle' || prevPhaseRef.current !== 'idle') {
         onPhaseChangeRef.current?.(phase, currentRound);
       }
@@ -355,7 +391,8 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
 
     if (timeLeft <= 3 && timeLeft >= 1) {
       // 閾値跨ぎ補完: lastAnnouncedが0の場合、3から現在値まで全て発火
-      const startSecond = lastAnnouncedRef.current === 0 ? 3 : lastAnnouncedRef.current - 1;
+      const startSecond =
+        lastAnnouncedRef.current === 0 ? 3 : lastAnnouncedRef.current - 1;
       for (let s = startSecond; s >= timeLeft; s--) {
         if (s >= 1 && s <= 3 && s < (lastAnnouncedRef.current || 4)) {
           onCountdownTickRef.current?.(s as 3 | 2 | 1);

@@ -28,7 +28,8 @@ export function TimerDisplay({
   totalRounds,
   timeLeft,
 }: TimerDisplayProps) {
-  const isCountdown = timeLeft <= 3 && timeLeft >= 1 && phase !== 'idle' && phase !== 'completed';
+  const isCountdown =
+    timeLeft <= 3 && timeLeft >= 1 && phase !== 'idle' && phase !== 'completed';
   const phaseClass = `timer-display--${phase}`;
   const countdownClass = isCountdown ? 'timer-display--countdown' : '';
 

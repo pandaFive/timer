@@ -12,7 +12,10 @@ describe('playBeep', () => {
   };
   let mockGain: {
     connect: ReturnType<typeof vi.fn>;
-    gain: { setValueAtTime: ReturnType<typeof vi.fn>; exponentialRampToValueAtTime: ReturnType<typeof vi.fn> };
+    gain: {
+      setValueAtTime: ReturnType<typeof vi.fn>;
+      exponentialRampToValueAtTime: ReturnType<typeof vi.fn>;
+    };
   };
   let mockContext: {
     createOscillator: ReturnType<typeof vi.fn>;
@@ -46,7 +49,10 @@ describe('playBeep', () => {
       close: vi.fn(),
     };
 
-    vi.stubGlobal('AudioContext', vi.fn(() => mockContext));
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(() => mockContext),
+    );
   });
 
   afterEach(() => {
@@ -58,7 +64,10 @@ describe('playBeep', () => {
 
     expect(mockContext.createOscillator).toHaveBeenCalled();
     expect(mockContext.createGain).toHaveBeenCalled();
-    expect(mockOscillator.frequency.setValueAtTime).toHaveBeenCalledWith(880, 0);
+    expect(mockOscillator.frequency.setValueAtTime).toHaveBeenCalledWith(
+      880,
+      0,
+    );
     expect(mockOscillator.start).toHaveBeenCalled();
     expect(mockOscillator.stop).toHaveBeenCalled();
   });
@@ -66,7 +75,10 @@ describe('playBeep', () => {
   it('デフォルトの周波数と長さで動作する', () => {
     playBeep();
 
-    expect(mockOscillator.frequency.setValueAtTime).toHaveBeenCalledWith(800, 0);
+    expect(mockOscillator.frequency.setValueAtTime).toHaveBeenCalledWith(
+      800,
+      0,
+    );
     expect(mockOscillator.stop).toHaveBeenCalled();
   });
 

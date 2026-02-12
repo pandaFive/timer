@@ -47,7 +47,10 @@ export function useCountdownVoice(): UseCountdownVoiceReturn {
 
   const speak = useCallback((secondsLeft: 3 | 2 | 1) => {
     // Speech API非対応 → ビープフォールバック
-    if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
+    if (
+      typeof speechSynthesis === 'undefined' ||
+      typeof SpeechSynthesisUtterance === 'undefined'
+    ) {
       playBeep(BEEP_FREQUENCIES[secondsLeft], 0.15);
       return;
     }

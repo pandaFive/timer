@@ -43,7 +43,9 @@ function loadYouTubeApi(): Promise<void> {
     }
 
     // scriptが既に挿入されている場合
-    const existing = document.querySelector('script[src*="youtube.com/iframe_api"]');
+    const existing = document.querySelector(
+      'script[src*="youtube.com/iframe_api"]',
+    );
     if (existing) {
       // コールバック待ち
       const prev = window.onYouTubeIframeAPIReady;

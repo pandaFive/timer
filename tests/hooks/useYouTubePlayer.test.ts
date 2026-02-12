@@ -29,14 +29,19 @@ function setupYTMock() {
   const mockPlayer = createMockPlayer();
   let callbacks: PlayerCallbacks = {};
 
-  const MockPlayer = vi.fn((_containerId: string, opts: {
-    height: string;
-    width: string;
-    events: PlayerCallbacks;
-  }) => {
-    callbacks = opts.events ?? {};
-    return mockPlayer;
-  });
+  const MockPlayer = vi.fn(
+    (
+      _containerId: string,
+      opts: {
+        height: string;
+        width: string;
+        events: PlayerCallbacks;
+      },
+    ) => {
+      callbacks = opts.events ?? {};
+      return mockPlayer;
+    },
+  );
 
   const YT = {
     Player: MockPlayer,
@@ -56,18 +61,24 @@ function setupYTMock() {
     mockPlayer,
     MockPlayer,
     triggerReady: () => callbacks.onReady?.({ target: mockPlayer }),
-    triggerStateChange: (state: number) => callbacks.onStateChange?.({ data: state }),
+    triggerStateChange: (state: number) =>
+      callbacks.onStateChange?.({ data: state }),
     triggerError: (code: number) => callbacks.onError?.({ data: code }),
   };
 }
 
 /** APIをready状態まで進めるヘルパー */
 async function readyPlayer(triggerReady: () => void) {
-  const callback = (window as unknown as Record<string, unknown>).onYouTubeIframeAPIReady as (() => void) | undefined;
+  const callback = (window as unknown as Record<string, unknown>)
+    .onYouTubeIframeAPIReady as (() => void) | undefined;
   if (callback) {
-    await act(async () => { callback(); });
+    await act(async () => {
+      callback();
+    });
   }
-  await act(async () => { triggerReady(); });
+  await act(async () => {
+    triggerReady();
+  });
 }
 
 describe('useYouTubePlayer', () => {
@@ -75,7 +86,9 @@ describe('useYouTubePlayer', () => {
   let appendChildSpy: any;
 
   beforeEach(() => {
-    appendChildSpy = vi.spyOn(document.head, 'appendChild').mockImplementation((node: Node) => node);
+    appendChildSpy = vi
+      .spyOn(document.head, 'appendChild')
+      .mockImplementation((node: Node) => node);
     vi.spyOn(document, 'querySelector').mockImplementation(() => null);
   });
 
@@ -107,7 +120,7 @@ describe('useYouTubePlayer', () => {
 
     // script挿入は不要（YTが既にある）
     const scriptCalls = appendChildSpy.mock.calls.filter(
-      (call: unknown[]) => (call[0] as HTMLElement)?.tagName === 'SCRIPT'
+      (call: unknown[]) => (call[0] as HTMLElement)?.tagName === 'SCRIPT',
     );
     expect(scriptCalls.length).toBe(0);
   });
@@ -127,7 +140,9 @@ describe('useYouTubePlayer', () => {
 
     await readyPlayer(triggerReady);
 
-    act(() => { result.current.loadAndPlay('dQw4w9WgXcQ'); });
+    act(() => {
+      result.current.loadAndPlay('dQw4w9WgXcQ');
+    });
 
     expect(mockPlayer.loadVideoById).toHaveBeenCalledWith('dQw4w9WgXcQ');
   });
@@ -138,7 +153,9 @@ describe('useYouTubePlayer', () => {
 
     await readyPlayer(triggerReady);
 
-    act(() => { result.current.setVolume(30); });
+    act(() => {
+      result.current.setVolume(30);
+    });
 
     expect(mockPlayer.setVolume).toHaveBeenCalledWith(30);
   });
@@ -149,7 +166,9 @@ describe('useYouTubePlayer', () => {
 
     await readyPlayer(triggerReady);
 
-    act(() => { result.current.stop(); });
+    act(() => {
+      result.current.stop();
+    });
 
     expect(mockPlayer.stopVideo).toHaveBeenCalled();
   });
@@ -160,26 +179,39 @@ describe('useYouTubePlayer', () => {
 
     await readyPlayer(triggerReady);
 
-    act(() => { result.current.loadAndPlay('testVideoId'); });
-    await act(async () => { triggerError(150); });
+    act(() => {
+      result.current.loadAndPlay('testVideoId');
+    });
+    await act(async () => {
+      triggerError(150);
+    });
 
     expect(result.current.needsUserGesture).toBe(true);
   });
 
   it('retryPlayで再生を再試行しneedsUserGestureがfalseになる', async () => {
-    const { mockPlayer, triggerReady, triggerError, triggerStateChange } = setupYTMock();
+    const { mockPlayer, triggerReady, triggerError, triggerStateChange } =
+      setupYTMock();
     const { result } = renderHook(() => useYouTubePlayer('test-player'));
 
     await readyPlayer(triggerReady);
 
-    act(() => { result.current.loadAndPlay('testVideoId'); });
-    await act(async () => { triggerError(150); });
+    act(() => {
+      result.current.loadAndPlay('testVideoId');
+    });
+    await act(async () => {
+      triggerError(150);
+    });
     expect(result.current.needsUserGesture).toBe(true);
 
-    act(() => { result.current.retryPlay(); });
+    act(() => {
+      result.current.retryPlay();
+    });
     expect(mockPlayer.playVideo).toHaveBeenCalled();
 
-    await act(async () => { triggerStateChange(1); });
+    await act(async () => {
+      triggerStateChange(1);
+    });
     expect(result.current.needsUserGesture).toBe(false);
   });
 
@@ -197,7 +229,9 @@ describe('useYouTubePlayer', () => {
   describe('StrictMode耐性', () => {
     it('シングルトンPromiseによりscript挿入は1回のみ', async () => {
       // YTは未ロード
-      const { unmount: unmount1 } = renderHook(() => useYouTubePlayer('test-player'));
+      const { unmount: unmount1 } = renderHook(() =>
+        useYouTubePlayer('test-player'),
+      );
       const firstCallCount = appendChildSpy.mock.calls.length;
 
       unmount1();

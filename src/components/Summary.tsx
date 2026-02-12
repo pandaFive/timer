@@ -27,11 +27,15 @@ export function Summary({
       <div className="summary__stats">
         <div className="summary__stat">
           <span className="summary__label">ワークアウト時間</span>
-          <span className="summary__value">{formatDuration(totalWorkoutTime)}</span>
+          <span className="summary__value">
+            {formatDuration(totalWorkoutTime)}
+          </span>
         </div>
         <div className="summary__stat">
           <span className="summary__label">休憩時間</span>
-          <span className="summary__value">{formatDuration(totalRestTime)}</span>
+          <span className="summary__value">
+            {formatDuration(totalRestTime)}
+          </span>
         </div>
         <div className="summary__stat">
           <span className="summary__label">合計時間</span>
