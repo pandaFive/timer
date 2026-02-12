@@ -63,7 +63,7 @@ function setupYTMock() {
 
 /** APIをready状態まで進めるヘルパー */
 async function readyPlayer(triggerReady: () => void) {
-  const callback = (window as Record<string, unknown>).onYouTubeIframeAPIReady as (() => void) | undefined;
+  const callback = (window as unknown as Record<string, unknown>).onYouTubeIframeAPIReady as (() => void) | undefined;
   if (callback) {
     await act(async () => { callback(); });
   }
@@ -71,7 +71,8 @@ async function readyPlayer(triggerReady: () => void) {
 }
 
 describe('useYouTubePlayer', () => {
-  let appendChildSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let appendChildSpy: any;
 
   beforeEach(() => {
     appendChildSpy = vi.spyOn(document.head, 'appendChild').mockImplementation((node: Node) => node);
@@ -81,7 +82,7 @@ describe('useYouTubePlayer', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    delete (window as Record<string, unknown>).__ytApiLoadPromise;
+    delete (window as unknown as Record<string, unknown>).__ytApiLoadPromise;
   });
 
   it('containerId付きのdiv要素を提供する', () => {
@@ -105,8 +106,9 @@ describe('useYouTubePlayer', () => {
     renderHook(() => useYouTubePlayer('test-player'));
 
     // script挿入は不要（YTが既にある）
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scriptCalls = appendChildSpy.mock.calls.filter(
-      (call) => (call[0] as HTMLElement)?.tagName === 'SCRIPT'
+      (call: any[]) => (call[0] as HTMLElement)?.tagName === 'SCRIPT'
     );
     expect(scriptCalls.length).toBe(0);
   });
