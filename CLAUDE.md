@@ -31,8 +31,11 @@ App.tsx（オーケストレータ）
 └── useCallback で3つのhookを連携（onCountdownTick, onPhaseChange）
 ```
 
-- **App.tsx** がphaseに基づきSettings / Timer画面（TimerDisplay + Controls + YouTubePlayer）/ Summary を切り替え
-- **useTimer** の状態遷移: `idle → workout ⇄ rest → completed`（最終ラウンドのrestはスキップ）
+- **App.tsx** がphaseに基づきSettings / Timer画面（TimerDisplay + Controls）/ Summary を切り替え
+- **useTimer** の状態遷移: `idle → [workout ⇄ rest] × rounds × sets → completed`
+  - セット内: `workout → rest → workout → ...`（最終ラウンドのrestはスキップ）
+  - セット間: 最終ラウンドworkout後 → セット間休憩（`betweenSetsRestSeconds`）→ 次セット先頭
+  - 最終セット最終ラウンドworkout後 → rest無しで `completed`
 - タイマーは `setInterval(200ms)` + `Date.now()` ベースの実時間計算（バックグラウンドタブ復帰時のキャッチアップアルゴリズムあり）
 - Settings は localStorage（`hiit-timer-config`）に永続化、破損データはDEFAULT_CONFIGにフォールバック
 

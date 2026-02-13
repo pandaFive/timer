@@ -22,7 +22,9 @@ export interface TimerConfig {
 /** タイマー状態 */
 export interface TimerState {
   phase: Phase;
+  /** 現在のセット番号（idle時は0、実行中は1始まり） */
   currentSet: number;
+  /** 現在セット内のラウンド番号（idle時は0、実行中は1始まり） */
   currentRound: number;
   timeLeft: number;
   isRunning: boolean;

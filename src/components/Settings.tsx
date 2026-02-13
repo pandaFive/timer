@@ -26,22 +26,37 @@ function loadConfig(): TimerConfig {
     if (!parsed || typeof parsed !== 'object') return DEFAULT_CONFIG;
 
     const obj = parsed as Record<string, unknown>;
+
+    /** 数値フィールドの安全な復元（NaN/Infinity/範囲外はデフォルト値） */
+    const safeInt = (
+      val: unknown,
+      min: number,
+      max: number,
+      fallback: number,
+    ): number =>
+      typeof val === 'number' &&
+      Number.isFinite(val) &&
+      val >= min &&
+      val <= max
+        ? Math.round(val)
+        : fallback;
+
     const config: TimerConfig = {
-      workoutSeconds:
-        typeof obj.workoutSeconds === 'number'
-          ? obj.workoutSeconds
-          : DEFAULT_CONFIG.workoutSeconds,
-      restSeconds:
-        typeof obj.restSeconds === 'number'
-          ? obj.restSeconds
-          : DEFAULT_CONFIG.restSeconds,
-      sets: typeof obj.sets === 'number' ? obj.sets : DEFAULT_CONFIG.sets,
-      rounds:
-        typeof obj.rounds === 'number' ? obj.rounds : DEFAULT_CONFIG.rounds,
-      betweenSetsRestSeconds:
-        typeof obj.betweenSetsRestSeconds === 'number'
-          ? obj.betweenSetsRestSeconds
-          : DEFAULT_CONFIG.betweenSetsRestSeconds,
+      workoutSeconds: safeInt(
+        obj.workoutSeconds,
+        1,
+        600,
+        DEFAULT_CONFIG.workoutSeconds,
+      ),
+      restSeconds: safeInt(obj.restSeconds, 1, 600, DEFAULT_CONFIG.restSeconds),
+      sets: safeInt(obj.sets, 1, 99, DEFAULT_CONFIG.sets),
+      rounds: safeInt(obj.rounds, 1, 99, DEFAULT_CONFIG.rounds),
+      betweenSetsRestSeconds: safeInt(
+        obj.betweenSetsRestSeconds,
+        0,
+        600,
+        DEFAULT_CONFIG.betweenSetsRestSeconds,
+      ),
       workoutUrl:
         typeof obj.workoutUrl === 'string'
           ? obj.workoutUrl

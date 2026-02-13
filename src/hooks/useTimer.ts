@@ -51,7 +51,11 @@ const initialInternalState: InternalState = {
   phaseStartedAt: null,
 };
 
-/** 休憩フェーズの秒数を算出（通常休憩 or セット間休憩） */
+/**
+ * 休憩フェーズの秒数を算出。
+ * round >= config.rounds（セット最終ラウンド）の場合はセット間休憩、
+ * それ以外は通常のラウンド間休憩を返す。
+ */
 function getRestDurationSeconds(config: TimerConfig, round: number): number {
   if (round >= config.rounds) {
     return config.betweenSetsRestSeconds;
@@ -61,7 +65,8 @@ function getRestDurationSeconds(config: TimerConfig, round: number): number {
 
 /**
  * 次のフェーズと状態を計算する。
- * 最終ラウンドのworkout後はrest無しでcompletedに遷移する。
+ * 最終セット最終ラウンドのworkout後はrest無しでcompletedに遷移する。
+ * 非最終セットの最終ラウンド後はセット間休憩（または直接次セット）に遷移する。
  */
 function computeNextPhase(
   phase: Phase,
@@ -106,7 +111,7 @@ function computeNextPhase(
       };
     }
 
-    // rest phase
+    // 休憩フェーズ
     return {
       nextPhase: 'rest',
       nextSet: currentSet,
@@ -206,7 +211,7 @@ function catchUp(
     }
   }
 
-  // 全ラウンド超過
+  // 全セット・全ラウンド超過 → completed
   return {
     phase: 'completed',
     set: config.sets,
