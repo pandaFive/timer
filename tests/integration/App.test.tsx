@@ -384,36 +384,43 @@ describe('App 統合テスト', () => {
       fireEvent.click(screen.getByText('スタート'));
     });
 
+    // set1 round1 workout -> rest
     currentTime += 4000;
     await act(async () => {
       vi.advanceTimersByTime(200);
     });
 
+    // set1 round1 rest -> set1 round2 workout
     currentTime += 1000;
     await act(async () => {
       vi.advanceTimersByTime(200);
     });
 
+    // set1 round2 workout -> between sets rest
     currentTime += 4000;
     await act(async () => {
       vi.advanceTimersByTime(200);
     });
 
+    // between sets rest -> set2 round1 workout
     currentTime += 2000;
     await act(async () => {
       vi.advanceTimersByTime(200);
     });
 
+    // set2 round1 workout -> rest
     currentTime += 4000;
     await act(async () => {
       vi.advanceTimersByTime(200);
     });
 
+    // set2 round1 rest -> set2 round2 workout
     currentTime += 1000;
     await act(async () => {
       vi.advanceTimersByTime(200);
     });
 
+    // set2 round2 workout -> completed
     currentTime += 4000;
     await act(async () => {
       vi.advanceTimersByTime(200);

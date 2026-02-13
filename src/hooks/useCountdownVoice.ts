@@ -2,13 +2,6 @@ import { useRef, useEffect, useCallback } from 'react';
 import { playBeep } from '../utils/beep';
 import type { Phase } from '../types';
 
-/** カウントダウン数字の読み上げ文字列 */
-const COUNTDOWN_NUMBERS: Record<number, string> = {
-  3: '3',
-  2: '2',
-  1: '1',
-};
-
 /** ビープ音の周波数（秒数別） */
 const BEEP_FREQUENCIES: Record<number, number> = {
   3: 880,
@@ -16,19 +9,21 @@ const BEEP_FREQUENCIES: Record<number, number> = {
   1: 1175,
 };
 
+/** カウントダウンは聞き取りやすさを優先し、やや速め・高めに調整 */
 const COUNTDOWN_VOICE_SETTINGS = {
   rate: 1.15,
   pitch: 1.05,
   volume: 1,
 } as const;
 
+/** セクション案内は落ち着いたトーンで短く聞き取れる設定 */
 const SECTION_VOICE_SETTINGS = {
   rate: 1,
   pitch: 1,
   volume: 0.95,
 } as const;
 
-interface SectionStartAnnouncement {
+export interface SectionStartAnnouncement {
   phase: Phase;
   isBetweenSetsRest: boolean;
 }
@@ -45,6 +40,7 @@ function buildSectionMessage({
   phase,
   isBetweenSetsRest,
 }: SectionStartAnnouncement): string | null {
+  if (phase === 'idle') return null;
   if (phase === 'workout') return 'Workout';
   if (phase === 'rest') {
     return isBetweenSetsRest ? 'Between sets rest' : 'Rest';
@@ -61,9 +57,9 @@ function applyVoiceSettings(
   utterance.rate = settings.rate;
   utterance.pitch = settings.pitch;
   utterance.volume = settings.volume;
+  utterance.lang = voice?.lang || 'en-US';
   if (voice) {
     utterance.voice = voice;
-    utterance.lang = 'en-US';
   }
 }
 
@@ -119,11 +115,8 @@ export function useCountdownVoice(): UseCountdownVoiceReturn {
       return;
     }
 
-    safeCancelSpeech();
-
-    // secondsLeft は 3 | 2 | 1 に制限されているため、COUNTDOWN_NUMBERS[secondsLeft] は必ず存在する
     const enVoice = enVoiceRef.current;
-    const text = COUNTDOWN_NUMBERS[secondsLeft]!;
+    const text = String(secondsLeft);
 
     const utterance = new SpeechSynthesisUtterance(text);
     applyVoiceSettings(utterance, enVoice, COUNTDOWN_VOICE_SETTINGS);
@@ -151,7 +144,18 @@ export function useCountdownVoice(): UseCountdownVoiceReturn {
 
       const utterance = new SpeechSynthesisUtterance(text);
       applyVoiceSettings(utterance, enVoiceRef.current, SECTION_VOICE_SETTINGS);
-      speechSynthesis.speak(utterance);
+      utterance.onerror = () => {
+        console.warn('Section announcement speech failed.');
+      };
+
+      try {
+        speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.warn(
+          'speechSynthesis.speak() failed for section announcement:',
+          e,
+        );
+      }
     },
     [],
   );

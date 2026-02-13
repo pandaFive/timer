@@ -1,5 +1,11 @@
 # TODO
 
+## Recently Completed (2026-02-13)
+
+- [x] `useCountdownVoice` のセクション案内失敗耐性を強化
+  - ファイル: `src/hooks/useCountdownVoice.ts`, `tests/hooks/useCountdownVoice.test.ts`
+  - 内容: `speakSectionStart` に `onerror` と `try-catch` を追加。型エクスポート、英語音声フォールバック、失敗系テストを拡充
+
 ## Low Priority (レビュー日: 2026-02-13)
 
 - [ ] `--color-completed-start/end` を `var(--color-accent)` / `var(--color-accent-hover)` 参照に変更

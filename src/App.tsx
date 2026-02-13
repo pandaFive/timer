@@ -39,6 +39,7 @@ function App() {
       // 音量を元に戻す
       setVolume(100);
 
+      // restフェーズで「最終ラウンド かつ 最終セット以外」の場合のみセット間休憩
       const isBetweenSetsRest =
         phase === 'rest' && set < config.sets && round === config.rounds;
 
@@ -90,7 +91,8 @@ function App() {
   const isBetweenSetsRest =
     state.phase === 'rest' &&
     !!configRef.current &&
-    state.currentRound >= configRef.current.rounds;
+    state.currentSet < configRef.current.sets &&
+    state.currentRound === configRef.current.rounds;
 
   return (
     <div className="app" translate="no">

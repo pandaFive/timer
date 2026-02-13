@@ -137,6 +137,34 @@ describe('useCountdownVoice', () => {
     expect(utteranceInstances[0]?.voice?.name).toBe('English US Exact');
   });
 
+  it('en-USが無い場合はen-GBにフォールバックする', () => {
+    mockGetVoices.mockReturnValue([
+      {
+        lang: 'en-GB',
+        name: 'English UK',
+        default: true,
+        localService: true,
+        voiceURI: 'en-gb',
+      },
+      {
+        lang: 'ja-JP',
+        name: 'Japanese',
+        default: false,
+        localService: true,
+        voiceURI: 'ja-jp',
+      },
+    ] as SpeechSynthesisVoice[]);
+
+    const { result } = renderHook(() => useCountdownVoice());
+
+    act(() => {
+      result.current.speakCountdown(3);
+    });
+
+    expect(utteranceInstances[0]?.voice?.lang).toBe('en-GB');
+    expect(utteranceInstances[0]?.lang).toBe('en-GB');
+  });
+
   it('英語音声が無い場合は数字を読み上げる', () => {
     mockGetVoices.mockReturnValue([
       {
@@ -159,15 +187,21 @@ describe('useCountdownVoice', () => {
     expect(utteranceInstances[0]?.voice).toBeNull();
   });
 
-  it('カウントダウン時は毎回cancelして発話キューを整理する', () => {
+  it('カウントダウン時は開始案内をキャンセルしない', () => {
     const { result } = renderHook(() => useCountdownVoice());
 
     act(() => {
+      result.current.speakSectionStart({
+        phase: 'workout',
+        isBetweenSetsRest: false,
+      });
       result.current.speakCountdown(3);
-      result.current.speakCountdown(2);
     });
 
-    expect(mockCancel).toHaveBeenCalledTimes(2);
+    // セクション開始時のcancelのみ実行され、カウントダウンで案内を打ち消さない
+    expect(mockCancel).toHaveBeenCalledTimes(1);
+    expect(utteranceInstances[0]?.text).toBe('Workout');
+    expect(utteranceInstances[1]?.text).toBe('3');
   });
 
   it('Speech API非対応の場合はカウントダウンをビープにフォールバックする', () => {
@@ -181,6 +215,22 @@ describe('useCountdownVoice', () => {
       });
     }).not.toThrow();
     expect(mockPlayBeep).toHaveBeenCalled();
+  });
+
+  it('Speech API非対応の場合はセクション案内をスキップする', () => {
+    vi.stubGlobal('speechSynthesis', undefined);
+
+    const { result } = renderHook(() => useCountdownVoice());
+
+    expect(() => {
+      act(() => {
+        result.current.speakSectionStart({
+          phase: 'workout',
+          isBetweenSetsRest: false,
+        });
+      });
+    }).not.toThrow();
+    expect(mockPlayBeep).not.toHaveBeenCalled();
   });
 
   it('voiceschangedイベントで音声リストを更新する', () => {
@@ -264,5 +314,67 @@ describe('useCountdownVoice', () => {
     expect(utteranceInstances[0]?.rate).toBe(1);
     expect(utteranceInstances[0]?.pitch).toBe(1);
     expect(utteranceInstances[0]?.volume).toBe(0.95);
+  });
+
+  it('cancelが例外でもセクション案内を継続する', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockCancel.mockImplementationOnce(() => {
+      throw new Error('cancel failed');
+    });
+
+    const { result } = renderHook(() => useCountdownVoice());
+
+    expect(() => {
+      act(() => {
+        result.current.speakSectionStart({
+          phase: 'workout',
+          isBetweenSetsRest: false,
+        });
+      });
+    }).not.toThrow();
+    expect(mockSpeak).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('セクション案内のonerrorをログ出力する', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockSpeak.mockImplementation(
+      (utterance: { onerror?: (e: Event) => void }) => {
+        utterance.onerror?.(new Event('error'));
+      },
+    );
+
+    const { result } = renderHook(() => useCountdownVoice());
+
+    act(() => {
+      result.current.speakSectionStart({
+        phase: 'workout',
+        isBetweenSetsRest: false,
+      });
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith('Section announcement speech failed.');
+    warnSpy.mockRestore();
+  });
+
+  it('セクション案内のspeak例外をキャッチする', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockSpeak.mockImplementation(() => {
+      throw new Error('speak failed');
+    });
+
+    const { result } = renderHook(() => useCountdownVoice());
+
+    expect(() => {
+      act(() => {
+        result.current.speakSectionStart({
+          phase: 'workout',
+          isBetweenSetsRest: false,
+        });
+      });
+    }).not.toThrow();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
