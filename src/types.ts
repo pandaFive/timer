@@ -26,7 +26,7 @@ export interface TimerPreset {
   /** 表示名（1〜30文字、制御文字を除去した値） */
   readonly name: string;
   /** 保存時点の設定スナップショット */
-  readonly config: TimerConfig;
+  readonly config: Readonly<TimerConfig>;
   /** 作成日時（UNIXミリ秒） */
   readonly createdAt: number;
 }

@@ -2,6 +2,9 @@
 
 ## Recently Completed (2026-02-13)
 
+- [x] presets破損時のlegacy救済移行を追加
+  - ファイル: `src/components/Settings.tsx`, `tests/integration/App.test.tsx`
+  - 内容: `hiit-timer-presets` が存在しても読み取り不能なら移行完了扱いしないよう修正。legacy設定を再移行してデータ喪失を防止
 - [x] 初期化耐障害性と警告ライフサイクルを改善
   - ファイル: `src/components/Settings.tsx`, `tests/integration/App.test.tsx`
   - 内容: `loadInitialState` の予期しない例外をフォールバック処理化。プリセット保存成功時に `storageWarning` をクリアする挙動を追加し、回帰テストを拡充

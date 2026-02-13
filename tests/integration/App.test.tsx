@@ -402,6 +402,28 @@ describe('App 統合テスト', () => {
     ).toBeInTheDocument();
   });
 
+  it('30文字を超えるプリセット名は保存できない', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const nameInput = screen.getByLabelText('プリセット名');
+    const overLimitName = 'a'.repeat(31);
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: overLimitName } });
+      fireEvent.click(screen.getByText('保存'));
+    });
+
+    expect(
+      screen.getByText('プリセット名は30文字以内で入力してください'),
+    ).toBeInTheDocument();
+
+    const stored = localStorage.getItem('hiit-timer-presets');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      expect(parsed.presets).toHaveLength(0);
+    }
+  });
+
   it('無効な設定値ではプリセット保存をブロックする', async () => {
     setupGlobalMocks();
     render(<App />);
@@ -538,6 +560,61 @@ describe('App 統合テスト', () => {
     expect(screen.getByText('プリセットを削除しました')).toBeInTheDocument();
   });
 
+  it('プリセット削除の書き込み失敗時は成功表示しない', async () => {
+    localStorage.setItem(
+      'hiit-timer-presets',
+      JSON.stringify({
+        presets: [
+          {
+            id: 'preset-delete-fail',
+            name: '削除失敗テスト',
+            config: {
+              workoutSeconds: 30,
+              restSeconds: 15,
+              sets: 1,
+              rounds: 8,
+              betweenSetsRestSeconds: 0,
+              workoutUrl: '',
+              restUrl: '',
+            },
+            createdAt: 100,
+          },
+        ],
+      }),
+    );
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === 'hiit-timer-presets') {
+        throw new DOMException('quota', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    setupGlobalMocks();
+    render(<App />);
+
+    const select = screen.getByLabelText('保存済み設定') as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(select, { target: { value: 'preset-delete-fail' } });
+      fireEvent.click(screen.getByText('削除'));
+    });
+
+    expect(
+      screen.getByText(
+        '保存済み設定の保存に失敗しました。ブラウザ容量を確認してください',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('プリセットを削除しました'),
+    ).not.toBeInTheDocument();
+    const stored = JSON.parse(localStorage.getItem('hiit-timer-presets')!);
+    expect(stored.presets).toHaveLength(1);
+  });
+
   it('プリセットは3件を超えて保存できない', async () => {
     setupGlobalMocks();
     render(<App />);
@@ -660,6 +737,36 @@ describe('App 統合テスト', () => {
     expect(stored.presets).toHaveLength(1);
     expect(stored.presets[0].id).toBe('preset-existing');
     expect(stored.presets[0].name).toBe('既存プリセット');
+    expect(localStorage.getItem('hiit-timer-config')).toBeNull();
+  });
+
+  it('presetsキー破損時はlegacy設定を救済移行する', async () => {
+    localStorage.setItem('hiit-timer-presets', 'broken-json');
+    localStorage.setItem(
+      'hiit-timer-config',
+      JSON.stringify({
+        workoutSeconds: 66,
+        restSeconds: 12,
+        sets: 2,
+        rounds: 5,
+        betweenSetsRestSeconds: 8,
+        workoutUrl: '',
+        restUrl: '',
+      }),
+    );
+    setupGlobalMocks();
+    render(<App />);
+    await act(async () => {});
+
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
+    expect(workoutInput.value).toBe('66');
+
+    const stored = JSON.parse(localStorage.getItem('hiit-timer-presets')!);
+    expect(stored.presets).toHaveLength(1);
+    expect(stored.presets[0].name).toBe('既存設定');
+    expect(stored.presets[0].config.workoutSeconds).toBe(66);
     expect(localStorage.getItem('hiit-timer-config')).toBeNull();
   });
 
@@ -863,6 +970,34 @@ describe('App 統合テスト', () => {
     const workoutInput = screen.getByLabelText('ワークアウト（秒）');
     await act(async () => {
       fireEvent.change(workoutInput, { target: { value: '40' } });
+    });
+
+    expect(
+      screen.getByText(
+        '下書き設定の保存に失敗しました。ブラウザ容量を確認してください',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('InvalidStateErrorでも下書き保存失敗として通知する', async () => {
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === 'hiit-timer-draft') {
+        throw new DOMException('invalid state', 'InvalidStateError');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    setupGlobalMocks();
+    render(<App />);
+
+    const workoutInput = screen.getByLabelText('ワークアウト（秒）');
+    await act(async () => {
+      fireEvent.change(workoutInput, { target: { value: '41' } });
     });
 
     expect(

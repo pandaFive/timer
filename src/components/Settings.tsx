@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TimerConfig, TimerPreset } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 import { extractVideoId } from '../utils/youtube';
@@ -29,10 +29,7 @@ interface PresetLoadResult {
   warning: string;
 }
 
-interface StorageWriteResult {
-  ok: boolean;
-  message: string;
-}
+type StorageWriteResult = { ok: true } | { ok: false; message: string };
 
 interface MigrationResult {
   ok: boolean;
@@ -58,7 +55,7 @@ interface ValidationErrors {
 }
 
 /** 設定を値コピーで複製 */
-function cloneConfig(config: TimerConfig): TimerConfig {
+function cloneConfig(config: Readonly<TimerConfig>): TimerConfig {
   return {
     workoutSeconds: config.workoutSeconds,
     restSeconds: config.restSeconds,
@@ -90,15 +87,26 @@ function safeInt(
     : fallback;
 }
 
-/** 想定するストレージアクセスエラー */
-function isStorageAccessError(error: unknown): error is DOMException {
+const STORAGE_ACCESS_ERROR_NAMES = new Set([
+  'SecurityError',
+  'QuotaExceededError',
+  'InvalidStateError',
+  'NS_ERROR_FILE_CORRUPTED',
+]);
+
+/** ストレージ障害を表す既知例外か判定する型ガード */
+function isStorageAccessError(error: unknown): error is Error {
+  if (!(error instanceof Error || error instanceof DOMException)) {
+    return false;
+  }
+
   return (
-    error instanceof DOMException &&
-    (error.name === 'SecurityError' || error.name === 'QuotaExceededError')
+    STORAGE_ACCESS_ERROR_NAMES.has(error.name) ||
+    error.name.startsWith('NS_ERROR_')
   );
 }
 
-/** 不正値をフォールバックしながら設定を復元 */
+/** 不正値をフォールバックしながら設定を復元（数値は四捨五入） */
 function normalizeConfig(
   value: unknown,
   fallback: TimerConfig = DEFAULT_CONFIG,
@@ -161,31 +169,55 @@ function loadLegacyConfig(): TimerConfig | null {
   }
 }
 
+/** presetsキーが読み取り可能なストア形式か判定 */
+function hasReadablePresetsStore(): boolean {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return false;
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return false;
+
+    const store = parsed as { presets?: unknown };
+    return Array.isArray(store.presets);
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError || isStorageAccessError(error)) {
+      console.warn('プリセットキーの読み取りに失敗しました:', error);
+      return false;
+    }
+    throw error;
+  }
+}
+
 /** 下書き設定をlocalStorageから復元 */
 function loadDraftConfig(): TimerConfig {
   try {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-    const hasPresetsKey = localStorage.getItem(PRESETS_STORAGE_KEY) !== null;
+    const hasPresetsStore = hasReadablePresetsStore();
     if (!raw) {
-      return hasPresetsKey
+      return hasPresetsStore
         ? DEFAULT_CONFIG
         : (loadLegacyConfig() ?? DEFAULT_CONFIG);
     }
 
     return normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG);
   } catch (error: unknown) {
-    if (error instanceof SyntaxError || isStorageAccessError(error)) {
+    if (error instanceof SyntaxError) {
       console.warn('下書き設定の読み込みに失敗しました:', error);
-      const hasPresetsKey = localStorage.getItem(PRESETS_STORAGE_KEY) !== null;
-      return hasPresetsKey
+      const hasPresetsStore = hasReadablePresetsStore();
+      return hasPresetsStore
         ? DEFAULT_CONFIG
         : (loadLegacyConfig() ?? DEFAULT_CONFIG);
+    }
+    if (isStorageAccessError(error)) {
+      console.warn('下書き設定の読み込みに失敗しました:', error);
+      return DEFAULT_CONFIG;
     }
     throw error;
   }
 }
 
-/** 下書き設定キーが有効なJSONかどうかを判定 */
+/** 下書き設定キーのJSONと内容（URL含む）が有効か判定 */
 function hasValidDraftConfig(): boolean {
   try {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
@@ -295,7 +327,7 @@ function saveDraftConfig(config: TimerConfig): StorageWriteResult {
       DRAFT_STORAGE_KEY,
       JSON.stringify(cloneConfig(config)),
     );
-    return { ok: true, message: '' };
+    return { ok: true };
   } catch (error: unknown) {
     if (isStorageAccessError(error)) {
       console.warn('下書き設定の保存に失敗しました:', error);
@@ -310,7 +342,7 @@ function savePresets(presets: TimerPreset[]): StorageWriteResult {
   try {
     const store: PresetStore = { presets };
     localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(store));
-    return { ok: true, message: '' };
+    return { ok: true };
   } catch (error: unknown) {
     if (isStorageAccessError(error)) {
       console.warn('プリセットの保存に失敗しました:', error);
@@ -324,7 +356,7 @@ function savePresets(presets: TimerPreset[]): StorageWriteResult {
 function removeLegacyConfig(): StorageWriteResult {
   try {
     localStorage.removeItem(LEGACY_STORAGE_KEY);
-    return { ok: true, message: '' };
+    return { ok: true };
   } catch (error: unknown) {
     if (isStorageAccessError(error)) {
       console.warn('旧設定キーの削除に失敗しました:', error);
@@ -349,7 +381,7 @@ function createPresetId(): string {
 /** 旧単一設定をプリセット形式へ互換移行 */
 function migrateLegacyConfig(): MigrationResult {
   try {
-    if (localStorage.getItem(PRESETS_STORAGE_KEY)) {
+    if (hasReadablePresetsStore()) {
       const removeLegacyResult = removeLegacyConfig();
       if (!removeLegacyResult.ok) {
         return {
@@ -525,6 +557,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
   const [statusMessage, setStatusMessage] = useState('');
   const [storageWarning, setStorageWarning] = useState(initialState.warning);
   const [storageError, setStorageError] = useState('');
+  const shouldSkipFirstDraftSaveRef = useRef(true);
 
   // 初回マウント時に旧設定移行を実行
   useEffect(() => {
@@ -537,7 +570,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
 
       const reloadedPresets = loadPresets();
       setPresets(reloadedPresets.presets);
-      setStorageWarning(reloadedPresets.warning);
+      setStorageWarning((prev) => reloadedPresets.warning || prev);
       setConfig(loadDraftConfig());
 
       if (!migration.ok) {
@@ -551,13 +584,28 @@ export function Settings({ disabled, onStart }: SettingsProps) {
 
   // 下書き設定の自動保存
   useEffect(() => {
-    const saveResult = saveDraftConfig(config);
-    if (!saveResult.ok) {
-      setStorageError(saveResult.message);
+    if (shouldSkipFirstDraftSaveRef.current) {
+      shouldSkipFirstDraftSaveRef.current = false;
       return;
     }
 
-    setStorageError((prev) => (prev === DRAFT_SAVE_ERROR_MESSAGE ? '' : prev));
+    try {
+      const saveResult = saveDraftConfig(config);
+      if (!saveResult.ok) {
+        setStorageError(saveResult.message);
+        return;
+      }
+
+      setStorageError((prev) =>
+        prev === DRAFT_SAVE_ERROR_MESSAGE ? '' : prev,
+      );
+    } catch (error: unknown) {
+      console.error(
+        '下書き設定の自動保存で予期しないエラーが発生しました:',
+        error,
+      );
+      setStorageError(DRAFT_SAVE_ERROR_MESSAGE);
+    }
   }, [config]);
 
   // ステータスメッセージを一定時間で消す
@@ -640,20 +688,28 @@ export function Settings({ disabled, onStart }: SettingsProps) {
     };
     const nextPresets = [...presets, newPreset];
 
-    const saveResult = savePresets(nextPresets);
-    if (!saveResult.ok) {
-      setStorageError(saveResult.message);
-      setStatusMessage('');
-      return;
-    }
+    try {
+      const saveResult = savePresets(nextPresets);
+      if (!saveResult.ok) {
+        setStorageError(saveResult.message);
+        setStatusMessage('');
+        return;
+      }
 
-    setPresets(nextPresets);
-    setStorageError('');
-    setStorageWarning('');
-    setSelectedPresetId(newPreset.id);
-    setPresetName('');
-    setPresetError('');
-    setStatusMessage('プリセットを保存しました');
+      setPresets(nextPresets);
+      setStorageError((prev) =>
+        prev === PRESET_SAVE_ERROR_MESSAGE ? '' : prev,
+      );
+      setStorageWarning('');
+      setSelectedPresetId(newPreset.id);
+      setPresetName('');
+      setPresetError('');
+      setStatusMessage('プリセットを保存しました');
+    } catch (error: unknown) {
+      console.error('プリセット保存で予期しないエラーが発生しました:', error);
+      setStorageError(PRESET_SAVE_ERROR_MESSAGE);
+      setStatusMessage('');
+    }
   }, [config, presetName, presets]);
 
   const handleLoadPreset = useCallback(() => {
@@ -693,19 +749,27 @@ export function Settings({ disabled, onStart }: SettingsProps) {
       return;
     }
 
-    const saveResult = savePresets(nextPresets);
-    if (!saveResult.ok) {
-      setStorageError(saveResult.message);
-      setStatusMessage('');
-      return;
-    }
+    try {
+      const saveResult = savePresets(nextPresets);
+      if (!saveResult.ok) {
+        setStorageError(saveResult.message);
+        setStatusMessage('');
+        return;
+      }
 
-    setPresets(nextPresets);
-    setStorageError('');
-    setStorageWarning('');
-    setSelectedPresetId('');
-    setPresetError('');
-    setStatusMessage('プリセットを削除しました');
+      setPresets(nextPresets);
+      setStorageError((prev) =>
+        prev === PRESET_SAVE_ERROR_MESSAGE ? '' : prev,
+      );
+      setStorageWarning('');
+      setSelectedPresetId('');
+      setPresetError('');
+      setStatusMessage('プリセットを削除しました');
+    } catch (error: unknown) {
+      console.error('プリセット削除で予期しないエラーが発生しました:', error);
+      setStorageError(PRESET_SAVE_ERROR_MESSAGE);
+      setStatusMessage('');
+    }
   }, [presets, selectedPresetId]);
 
   return (
@@ -902,30 +966,28 @@ export function Settings({ disabled, onStart }: SettingsProps) {
         </div>
       </div>
 
-      {(presetError || storageError || storageWarning || statusMessage) && (
-        <div className="settings__field">
-          {presetError && (
-            <span className="settings__error" role="alert">
-              {presetError}
-            </span>
-          )}
-          {storageError && (
-            <span className="settings__error" role="alert">
-              {storageError}
-            </span>
-          )}
-          {storageWarning && (
-            <span className="settings__warning" role="alert">
-              {storageWarning}
-            </span>
-          )}
-          {statusMessage && (
-            <span className="settings__status" role="status">
-              {statusMessage}
-            </span>
-          )}
-        </div>
-      )}
+      <div className="settings__field" aria-live="polite" aria-atomic="true">
+        {presetError && (
+          <span className="settings__error" role="alert">
+            {presetError}
+          </span>
+        )}
+        {storageError && (
+          <span className="settings__error" role="alert">
+            {storageError}
+          </span>
+        )}
+        {storageWarning && (
+          <span className="settings__warning" role="alert">
+            {storageWarning}
+          </span>
+        )}
+        {statusMessage && (
+          <span className="settings__status" role="status">
+            {statusMessage}
+          </span>
+        )}
+      </div>
 
       <div className="settings__actions">
         <button
