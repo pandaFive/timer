@@ -19,6 +19,8 @@ const PRESET_LOAD_ERROR_MESSAGE = '保存済み設定の読み込みに失敗し
 const LEGACY_MIGRATION_ERROR_MESSAGE = '旧設定の移行に失敗しました';
 const INITIAL_LOAD_ERROR_MESSAGE =
   '設定の初期化に失敗しました。デフォルト設定を使用します';
+const MIGRATION_RELOAD_ERROR_MESSAGE =
+  '移行後の設定再読み込みに失敗しました。デフォルト設定を使用します';
 
 interface PresetStore {
   presets: TimerPreset[];
@@ -43,6 +45,10 @@ interface InitialState {
   warning: string;
 }
 
+interface ReadOptions {
+  silent?: boolean;
+}
+
 /** バリデーションエラー */
 interface ValidationErrors {
   workoutSeconds?: string;
@@ -65,6 +71,19 @@ function cloneConfig(config: Readonly<TimerConfig>): TimerConfig {
     workoutUrl: config.workoutUrl,
     restUrl: config.restUrl,
   };
+}
+
+/** 2つの設定値が同じか判定 */
+function isSameConfig(left: TimerConfig, right: TimerConfig): boolean {
+  return (
+    left.workoutSeconds === right.workoutSeconds &&
+    left.restSeconds === right.restSeconds &&
+    left.sets === right.sets &&
+    left.rounds === right.rounds &&
+    left.betweenSetsRestSeconds === right.betweenSetsRestSeconds &&
+    left.workoutUrl === right.workoutUrl &&
+    left.restUrl === right.restUrl
+  );
 }
 
 /** 制御文字を除去したプリセット名を返す */
@@ -149,8 +168,68 @@ function sanitizeUrls(config: TimerConfig): TimerConfig {
   };
 }
 
+/** 値がプレーンオブジェクトか判定 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** 下書き設定の必須スキーマを満たすか判定 */
+function hasDraftConfigShape(value: unknown): value is TimerConfig {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.workoutSeconds === 'number' &&
+    Number.isFinite(value.workoutSeconds) &&
+    typeof value.restSeconds === 'number' &&
+    Number.isFinite(value.restSeconds) &&
+    typeof value.sets === 'number' &&
+    Number.isFinite(value.sets) &&
+    typeof value.rounds === 'number' &&
+    Number.isFinite(value.rounds) &&
+    typeof value.betweenSetsRestSeconds === 'number' &&
+    Number.isFinite(value.betweenSetsRestSeconds) &&
+    typeof value.workoutUrl === 'string' &&
+    typeof value.restUrl === 'string'
+  );
+}
+
+/** 単一プリセット要素を検証して正規化する */
+function parseValidPreset(
+  value: unknown,
+  nameSet: Set<string>,
+): TimerPreset | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== 'string') return null;
+  if (
+    typeof value.createdAt !== 'number' ||
+    !Number.isFinite(value.createdAt) ||
+    value.createdAt < 0
+  ) {
+    return null;
+  }
+
+  const name = sanitizePresetName(
+    typeof value.name === 'string' ? value.name : '',
+  );
+  if (name.length < 1 || name.length > PRESET_NAME_MAX_LENGTH) return null;
+
+  const normalizedName = name.toLowerCase();
+  if (nameSet.has(normalizedName)) return null;
+
+  const config = sanitizeUrls(normalizeConfig(value.config, DEFAULT_CONFIG));
+  if (Object.keys(validate(config)).length > 0) return null;
+
+  nameSet.add(normalizedName);
+  return {
+    id: value.id,
+    name,
+    config: cloneConfig(config),
+    createdAt: value.createdAt,
+  };
+}
+
 /** 旧単一設定の有効値のみを厳格に復元 */
-function loadLegacyConfig(): TimerConfig | null {
+function loadLegacyConfig(options: ReadOptions = {}): TimerConfig | null {
   try {
     const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return null;
@@ -162,7 +241,9 @@ function loadLegacyConfig(): TimerConfig | null {
     return Object.keys(errors).length === 0 ? config : null;
   } catch (error: unknown) {
     if (error instanceof SyntaxError || isStorageAccessError(error)) {
-      console.warn('旧設定の読み込みに失敗しました:', error);
+      if (!options.silent) {
+        console.warn('旧設定の読み込みに失敗しました:', error);
+      }
       return null;
     }
     throw error;
@@ -170,19 +251,27 @@ function loadLegacyConfig(): TimerConfig | null {
 }
 
 /** presetsキーが読み取り可能なストア形式か判定 */
-function hasReadablePresetsStore(): boolean {
+function hasReadablePresetsStore(options: ReadOptions = {}): boolean {
   try {
     const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
     if (!raw) return false;
 
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return false;
+    if (!isRecord(parsed)) return false;
 
     const store = parsed as { presets?: unknown };
-    return Array.isArray(store.presets);
+    if (!Array.isArray(store.presets)) return false;
+    if (store.presets.length === 0) return true;
+
+    const nameSet = new Set<string>();
+    return store.presets.some(
+      (preset) => parseValidPreset(preset, nameSet) !== null,
+    );
   } catch (error: unknown) {
     if (error instanceof SyntaxError || isStorageAccessError(error)) {
-      console.warn('プリセットキーの読み取りに失敗しました:', error);
+      if (!options.silent) {
+        console.warn('プリセットキーの読み取りに失敗しました:', error);
+      }
       return false;
     }
     throw error;
@@ -200,14 +289,14 @@ function loadDraftConfig(): TimerConfig {
         : (loadLegacyConfig() ?? DEFAULT_CONFIG);
     }
 
-    return normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG);
+    return sanitizeUrls(normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG));
   } catch (error: unknown) {
     if (error instanceof SyntaxError) {
       console.warn('下書き設定の読み込みに失敗しました:', error);
-      const hasPresetsStore = hasReadablePresetsStore();
+      const hasPresetsStore = hasReadablePresetsStore({ silent: true });
       return hasPresetsStore
         ? DEFAULT_CONFIG
-        : (loadLegacyConfig() ?? DEFAULT_CONFIG);
+        : (loadLegacyConfig({ silent: true }) ?? DEFAULT_CONFIG);
     }
     if (isStorageAccessError(error)) {
       console.warn('下書き設定の読み込みに失敗しました:', error);
@@ -223,9 +312,13 @@ function hasValidDraftConfig(): boolean {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
     if (!raw) return false;
 
-    const config = sanitizeUrls(
-      normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG),
-    );
+    const parsed: unknown = JSON.parse(raw);
+    if (!hasDraftConfigShape(parsed)) {
+      console.warn('下書き設定キーの形式が不正なため再生成します');
+      return false;
+    }
+
+    const config = sanitizeUrls(normalizeConfig(parsed, DEFAULT_CONFIG));
     return Object.keys(validate(config)).length === 0;
   } catch (error: unknown) {
     if (error instanceof SyntaxError || isStorageAccessError(error)) {
@@ -254,63 +347,35 @@ function loadPresets(): PresetLoadResult {
       return { presets: [], warning: PRESET_LOAD_WARNING_MESSAGE };
     }
 
-    const nameSet = new Set<string>();
-    const result: TimerPreset[] = [];
+    const normalizedPresets: TimerPreset[] = [];
     let droppedCount = 0;
+    const nameSet = new Set<string>();
 
     for (const preset of store.presets) {
-      if (result.length >= MAX_PRESETS) {
+      if (normalizedPresets.length >= MAX_PRESETS) {
         droppedCount += 1;
         continue;
       }
-      if (!preset || typeof preset !== 'object') {
-        droppedCount += 1;
-        continue;
-      }
-
-      const obj = preset as Record<string, unknown>;
-      if (typeof obj.id !== 'string' || typeof obj.createdAt !== 'number') {
+      const validPreset = parseValidPreset(preset, nameSet);
+      if (!validPreset) {
         droppedCount += 1;
         continue;
       }
 
-      const name = sanitizePresetName(
-        typeof obj.name === 'string' ? obj.name : '',
-      );
-      if (name.length < 1 || name.length > PRESET_NAME_MAX_LENGTH) {
-        droppedCount += 1;
-        continue;
-      }
-
-      const normalizedName = name.toLowerCase();
-      if (nameSet.has(normalizedName)) {
-        droppedCount += 1;
-        continue;
-      }
-
-      const config = sanitizeUrls(normalizeConfig(obj.config, DEFAULT_CONFIG));
-      if (Object.keys(validate(config)).length > 0) {
-        droppedCount += 1;
-        continue;
-      }
-
-      nameSet.add(normalizedName);
-      result.push({
-        id: obj.id,
-        name,
-        config: cloneConfig(config),
-        createdAt: obj.createdAt,
-      });
+      normalizedPresets.push(validPreset);
     }
 
     if (droppedCount > 0) {
       console.warn(
-        `不正なプリセットを ${droppedCount} 件スキップしました（保持: ${result.length} 件）`,
+        `不正なプリセットを ${droppedCount} 件スキップしました（保持: ${normalizedPresets.length} 件）`,
       );
-      return { presets: result, warning: PRESET_LOAD_WARNING_MESSAGE };
+      return {
+        presets: normalizedPresets,
+        warning: PRESET_LOAD_WARNING_MESSAGE,
+      };
     }
 
-    return { presets: result, warning: '' };
+    return { presets: normalizedPresets, warning: '' };
   } catch (error: unknown) {
     if (error instanceof SyntaxError || isStorageAccessError(error)) {
       console.warn('プリセットの読み込みに失敗しました:', error);
@@ -557,7 +622,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
   const [statusMessage, setStatusMessage] = useState('');
   const [storageWarning, setStorageWarning] = useState(initialState.warning);
   const [storageError, setStorageError] = useState('');
-  const shouldSkipFirstDraftSaveRef = useRef(true);
+  const shouldSkipNextDraftSaveRef = useRef(true);
 
   // 初回マウント時に旧設定移行を実行
   useEffect(() => {
@@ -571,7 +636,18 @@ export function Settings({ disabled, onStart }: SettingsProps) {
       const reloadedPresets = loadPresets();
       setPresets(reloadedPresets.presets);
       setStorageWarning((prev) => reloadedPresets.warning || prev);
-      setConfig(loadDraftConfig());
+
+      try {
+        const reloadedConfig = loadDraftConfig();
+        setConfig((prev) => {
+          if (isSameConfig(prev, reloadedConfig)) return prev;
+          shouldSkipNextDraftSaveRef.current = true;
+          return cloneConfig(reloadedConfig);
+        });
+      } catch (error: unknown) {
+        console.error('移行後の設定再読み込みに失敗しました:', error);
+        setStorageError(MIGRATION_RELOAD_ERROR_MESSAGE);
+      }
 
       if (!migration.ok) {
         setStorageError(migration.message);
@@ -584,8 +660,8 @@ export function Settings({ disabled, onStart }: SettingsProps) {
 
   // 下書き設定の自動保存
   useEffect(() => {
-    if (shouldSkipFirstDraftSaveRef.current) {
-      shouldSkipFirstDraftSaveRef.current = false;
+    if (shouldSkipNextDraftSaveRef.current) {
+      shouldSkipNextDraftSaveRef.current = false;
       return;
     }
 
@@ -729,7 +805,6 @@ export function Settings({ disabled, onStart }: SettingsProps) {
     setConfig(cloneConfig(preset.config));
     setErrors({});
     setPresetError('');
-    setStorageWarning('');
     setStatusMessage('プリセットを読み込みました');
   }, [presets, selectedPresetId]);
 

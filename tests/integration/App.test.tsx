@@ -532,6 +532,47 @@ describe('App 統合テスト', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('プリセット読込では既存のストレージ警告をクリアしない', async () => {
+    localStorage.setItem(
+      'hiit-timer-presets',
+      JSON.stringify({
+        presets: [
+          {
+            id: 'preset-valid',
+            name: '有効プリセット',
+            config: {
+              workoutSeconds: 35,
+              restSeconds: 10,
+              sets: 1,
+              rounds: 4,
+              betweenSetsRestSeconds: 0,
+              workoutUrl: '',
+              restUrl: '',
+            },
+            createdAt: 100,
+          },
+          { id: 1, name: '', config: null, createdAt: -1 },
+        ],
+      }),
+    );
+    setupGlobalMocks();
+    render(<App />);
+
+    expect(
+      screen.getByText('保存済み設定の一部を読み込めませんでした'),
+    ).toBeInTheDocument();
+
+    const select = screen.getByLabelText('保存済み設定') as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(select, { target: { value: 'preset-valid' } });
+      fireEvent.click(screen.getByText('読込'));
+    });
+
+    expect(
+      screen.getByText('保存済み設定の一部を読み込めませんでした'),
+    ).toBeInTheDocument();
+  });
+
   it('プリセットを削除できる', async () => {
     setupGlobalMocks();
     render(<App />);
@@ -770,6 +811,69 @@ describe('App 統合テスト', () => {
     expect(localStorage.getItem('hiit-timer-config')).toBeNull();
   });
 
+  it('draftスキーマ不一致時はlegacy設定で上書き移行する', async () => {
+    localStorage.setItem('hiit-timer-draft', JSON.stringify({ foo: 'bar' }));
+    localStorage.setItem(
+      'hiit-timer-config',
+      JSON.stringify({
+        workoutSeconds: 72,
+        restSeconds: 18,
+        sets: 2,
+        rounds: 4,
+        betweenSetsRestSeconds: 10,
+        workoutUrl: '',
+        restUrl: '',
+      }),
+    );
+    setupGlobalMocks();
+    render(<App />);
+    await act(async () => {});
+
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
+    expect(workoutInput.value).toBe('72');
+
+    const draft = JSON.parse(localStorage.getItem('hiit-timer-draft')!);
+    expect(draft.workoutSeconds).toBe(72);
+    expect(localStorage.getItem('hiit-timer-config')).toBeNull();
+  });
+
+  it('presets配列が全件不正ならlegacy設定を移行する', async () => {
+    localStorage.setItem(
+      'hiit-timer-presets',
+      JSON.stringify({
+        presets: [{ id: 1, name: '', config: null, createdAt: -1 }],
+      }),
+    );
+    localStorage.setItem(
+      'hiit-timer-config',
+      JSON.stringify({
+        workoutSeconds: 68,
+        restSeconds: 14,
+        sets: 3,
+        rounds: 5,
+        betweenSetsRestSeconds: 12,
+        workoutUrl: '',
+        restUrl: '',
+      }),
+    );
+    setupGlobalMocks();
+    render(<App />);
+    await act(async () => {});
+
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
+    expect(workoutInput.value).toBe('68');
+
+    const stored = JSON.parse(localStorage.getItem('hiit-timer-presets')!);
+    expect(stored.presets).toHaveLength(1);
+    expect(stored.presets[0].name).toBe('既存設定');
+    expect(stored.presets[0].config.workoutSeconds).toBe(68);
+    expect(localStorage.getItem('hiit-timer-config')).toBeNull();
+  });
+
   it('presets がある場合はdraft欠損でもlegacyへフォールバックしない', () => {
     localStorage.setItem(
       'hiit-timer-presets',
@@ -836,6 +940,32 @@ describe('App 統合テスト', () => {
     expect(workoutInput.value).toBe('77');
   });
 
+  it('draft復元時は不正URLを空文字へ正規化する', () => {
+    localStorage.setItem(
+      'hiit-timer-draft',
+      JSON.stringify({
+        workoutSeconds: 30,
+        restSeconds: 15,
+        sets: 1,
+        rounds: 8,
+        betweenSetsRestSeconds: 0,
+        workoutUrl: 'https://evil.example.com/watch?v=bad',
+        restUrl: 'https://not-youtube.example.org',
+      }),
+    );
+    setupGlobalMocks();
+    render(<App />);
+
+    const workoutUrl = screen.getByLabelText(
+      'ワークアウト曲（YouTube URL）',
+    ) as HTMLInputElement;
+    const restUrl = screen.getByLabelText(
+      '休憩曲（YouTube URL）',
+    ) as HTMLInputElement;
+    expect(workoutUrl.value).toBe('');
+    expect(restUrl.value).toBe('');
+  });
+
   it('旧設定移行時にdraftキーを自動生成する', async () => {
     localStorage.setItem(
       'hiit-timer-config',
@@ -858,6 +988,37 @@ describe('App 統合テスト', () => {
     const parsed = JSON.parse(draft!);
     expect(parsed.workoutSeconds).toBe(55);
     expect(parsed.restSeconds).toBe(14);
+  });
+
+  it('旧設定移行でdraft書き込みは1回だけ実行する', async () => {
+    localStorage.setItem(
+      'hiit-timer-config',
+      JSON.stringify({
+        workoutSeconds: 58,
+        restSeconds: 13,
+        sets: 2,
+        rounds: 5,
+        betweenSetsRestSeconds: 7,
+        workoutUrl: '',
+        restUrl: '',
+      }),
+    );
+
+    const originalSetItem = Storage.prototype.setItem;
+    const draftSetItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        return originalSetItem.call(this, key, value);
+      });
+
+    setupGlobalMocks();
+    render(<App />);
+    await act(async () => {});
+
+    const draftWriteCount = draftSetItemSpy.mock.calls.filter(
+      ([key]) => key === 'hiit-timer-draft',
+    ).length;
+    expect(draftWriteCount).toBe(1);
   });
 
   it('破損したプリセットJSONは復旧して警告表示する', () => {
