@@ -78,7 +78,7 @@ export function Controls({
           onClick={isRunning ? onPause : onResume}
           aria-label={isRunning ? '一時停止' : '再開'}
         >
-          {isRunning ? '⏸ 一時停止' : '▶ 再開'}
+          {isRunning ? '一時停止' : '再開'}
         </button>
 
         <button
@@ -86,7 +86,7 @@ export function Controls({
           onClick={onSkip}
           aria-label="スキップ"
         >
-          ⏭ スキップ
+          スキップ
         </button>
 
         <button
@@ -94,7 +94,7 @@ export function Controls({
           onClick={onReset}
           aria-label="リセット"
         >
-          ⏹ リセット
+          リセット
         </button>
       </div>
 

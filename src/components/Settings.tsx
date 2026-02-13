@@ -138,92 +138,96 @@ export function Settings({ disabled, onStart }: SettingsProps) {
     <form className="settings" onSubmit={handleSubmit}>
       <h2>設定</h2>
 
-      <div className="settings__field">
-        <label htmlFor="workoutSeconds">ワークアウト（秒）</label>
-        <input
-          id="workoutSeconds"
-          type="number"
-          min={1}
-          max={600}
-          value={config.workoutSeconds}
-          onChange={(e) => handleChange('workoutSeconds', e.target.value)}
-          disabled={disabled}
-        />
-        {errors.workoutSeconds && (
-          <span className="settings__error" role="alert">
-            {errors.workoutSeconds}
-          </span>
-        )}
+      <div className="settings__field-group">
+        <div className="settings__field">
+          <label htmlFor="workoutSeconds">ワークアウト（秒）</label>
+          <input
+            id="workoutSeconds"
+            type="number"
+            min={1}
+            max={600}
+            value={config.workoutSeconds}
+            onChange={(e) => handleChange('workoutSeconds', e.target.value)}
+            disabled={disabled}
+          />
+          {errors.workoutSeconds && (
+            <span className="settings__error" role="alert">
+              {errors.workoutSeconds}
+            </span>
+          )}
+        </div>
+
+        <div className="settings__field">
+          <label htmlFor="restSeconds">休憩（秒）</label>
+          <input
+            id="restSeconds"
+            type="number"
+            min={1}
+            max={600}
+            value={config.restSeconds}
+            onChange={(e) => handleChange('restSeconds', e.target.value)}
+            disabled={disabled}
+          />
+          {errors.restSeconds && (
+            <span className="settings__error" role="alert">
+              {errors.restSeconds}
+            </span>
+          )}
+        </div>
+
+        <div className="settings__field">
+          <label htmlFor="rounds">ラウンド数</label>
+          <input
+            id="rounds"
+            type="number"
+            min={1}
+            max={99}
+            value={config.rounds}
+            onChange={(e) => handleChange('rounds', e.target.value)}
+            disabled={disabled}
+          />
+          {errors.rounds && (
+            <span className="settings__error" role="alert">
+              {errors.rounds}
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="settings__field">
-        <label htmlFor="restSeconds">休憩（秒）</label>
-        <input
-          id="restSeconds"
-          type="number"
-          min={1}
-          max={600}
-          value={config.restSeconds}
-          onChange={(e) => handleChange('restSeconds', e.target.value)}
-          disabled={disabled}
-        />
-        {errors.restSeconds && (
-          <span className="settings__error" role="alert">
-            {errors.restSeconds}
-          </span>
-        )}
-      </div>
+      <div className="settings__field-group">
+        <div className="settings__field">
+          <label htmlFor="workoutUrl">ワークアウト曲（YouTube URL）</label>
+          <input
+            id="workoutUrl"
+            type="url"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={config.workoutUrl}
+            onChange={(e) => handleChange('workoutUrl', e.target.value)}
+            disabled={disabled}
+          />
+          {errors.workoutUrl && (
+            <span className="settings__error" role="alert">
+              {errors.workoutUrl}
+            </span>
+          )}
+        </div>
 
-      <div className="settings__field">
-        <label htmlFor="rounds">ラウンド数</label>
-        <input
-          id="rounds"
-          type="number"
-          min={1}
-          max={99}
-          value={config.rounds}
-          onChange={(e) => handleChange('rounds', e.target.value)}
-          disabled={disabled}
-        />
-        {errors.rounds && (
-          <span className="settings__error" role="alert">
-            {errors.rounds}
-          </span>
-        )}
-      </div>
-
-      <div className="settings__field">
-        <label htmlFor="workoutUrl">ワークアウト曲（YouTube URL）</label>
-        <input
-          id="workoutUrl"
-          type="url"
-          placeholder="https://www.youtube.com/watch?v=..."
-          value={config.workoutUrl}
-          onChange={(e) => handleChange('workoutUrl', e.target.value)}
-          disabled={disabled}
-        />
-        {errors.workoutUrl && (
-          <span className="settings__error" role="alert">
-            {errors.workoutUrl}
-          </span>
-        )}
-      </div>
-
-      <div className="settings__field">
-        <label htmlFor="restUrl">休憩曲（YouTube URL）</label>
-        <input
-          id="restUrl"
-          type="url"
-          placeholder="https://www.youtube.com/watch?v=..."
-          value={config.restUrl}
-          onChange={(e) => handleChange('restUrl', e.target.value)}
-          disabled={disabled}
-        />
-        {errors.restUrl && (
-          <span className="settings__error" role="alert">
-            {errors.restUrl}
-          </span>
-        )}
+        <div className="settings__field">
+          <label htmlFor="restUrl">休憩曲（YouTube URL）</label>
+          <input
+            id="restUrl"
+            type="url"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={config.restUrl}
+            onChange={(e) => handleChange('restUrl', e.target.value)}
+            disabled={disabled}
+          />
+          {errors.restUrl && (
+            <span className="settings__error" role="alert">
+              {errors.restUrl}
+            </span>
+          )}
+        </div>
       </div>
 
       <button type="submit" disabled={disabled} className="settings__start-btn">
