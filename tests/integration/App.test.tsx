@@ -381,6 +381,7 @@ describe('App 統合テスト', () => {
     // set1 round1 workout開始
     expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(1);
     expect(mockPlayer.loadVideoById).toHaveBeenNthCalledWith(1, 'dQw4w9WgXcQ');
+    expect(screen.getByText('ワークアウト')).toBeInTheDocument();
 
     // set1 round1 rest（同セット内）: 切替なし
     currentTime += 2000;
@@ -388,6 +389,8 @@ describe('App 統合テスト', () => {
       vi.advanceTimersByTime(200);
     });
     expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('休憩')).toBeInTheDocument();
+    expect(screen.queryByText('セット間休憩')).not.toBeInTheDocument();
 
     // set1 round2 workout（同セット内）: 切替なし
     currentTime += 1000;
@@ -403,6 +406,7 @@ describe('App 統合テスト', () => {
     });
     expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(2);
     expect(mockPlayer.loadVideoById).toHaveBeenNthCalledWith(2, 'M7FIvfx5J10');
+    expect(screen.getByText('セット間休憩')).toBeInTheDocument();
 
     // set2 round1開始: ワークアウト曲へ戻す
     currentTime += 2000;
@@ -411,5 +415,6 @@ describe('App 統合テスト', () => {
     });
     expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(3);
     expect(mockPlayer.loadVideoById).toHaveBeenNthCalledWith(3, 'dQw4w9WgXcQ');
+    expect(screen.getByText('ワークアウト')).toBeInTheDocument();
   });
 });

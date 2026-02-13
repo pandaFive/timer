@@ -80,6 +80,10 @@ function App() {
   }, [reset, stop]);
 
   const isTimerActive = state.phase !== 'idle' && state.phase !== 'completed';
+  const isBetweenSetsRest =
+    state.phase === 'rest' &&
+    !!configRef.current &&
+    state.currentRound >= configRef.current.rounds;
 
   return (
     <div className="app" translate="no">
@@ -93,6 +97,7 @@ function App() {
         <>
           <TimerDisplay
             phase={state.phase}
+            isBetweenSetsRest={isBetweenSetsRest}
             currentSet={state.currentSet}
             totalSets={configRef.current?.sets ?? 0}
             currentRound={state.currentRound}
