@@ -17,6 +17,7 @@ const PHASE_LABELS: Record<Phase, string> = {
 
 interface TimerDisplayProps {
   phase: Phase;
+  isBetweenSetsRest: boolean;
   currentSet: number;
   totalSets: number;
   currentRound: number;
@@ -26,6 +27,7 @@ interface TimerDisplayProps {
 
 export function TimerDisplay({
   phase,
+  isBetweenSetsRest,
   currentSet,
   totalSets,
   currentRound,
@@ -36,14 +38,18 @@ export function TimerDisplay({
     timeLeft <= 3 && timeLeft >= 1 && phase !== 'idle' && phase !== 'completed';
   const phaseClass = `timer-display--${phase}`;
   const countdownClass = isCountdown ? 'timer-display--countdown' : '';
+  const phaseLabel =
+    phase === 'rest' && isBetweenSetsRest
+      ? 'セット間休憩'
+      : PHASE_LABELS[phase];
 
   return (
     <div
       className={`timer-display ${phaseClass} ${countdownClass}`}
       aria-live="polite"
-      aria-label={`${PHASE_LABELS[phase]} セット${currentSet}/${totalSets} ラウンド${currentRound}/${roundsPerSet} 残り${timeLeft}秒`}
+      aria-label={`${phaseLabel} セット${currentSet}/${totalSets} ラウンド${currentRound}/${roundsPerSet} 残り${timeLeft}秒`}
     >
-      <div className="timer-display__phase">{PHASE_LABELS[phase]}</div>
+      <div className="timer-display__phase">{phaseLabel}</div>
 
       {phase !== 'idle' && phase !== 'completed' && (
         <>
