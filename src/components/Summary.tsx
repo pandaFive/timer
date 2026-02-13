@@ -9,6 +9,8 @@ function formatDuration(seconds: number): string {
 interface SummaryProps {
   totalWorkoutTime: number;
   totalRestTime: number;
+  totalSets: number;
+  roundsPerSet: number;
   totalRounds: number;
   onReset: () => void;
 }
@@ -16,6 +18,8 @@ interface SummaryProps {
 export function Summary({
   totalWorkoutTime,
   totalRestTime,
+  totalSets,
+  roundsPerSet,
   totalRounds,
   onReset,
 }: SummaryProps) {
@@ -43,7 +47,15 @@ export function Summary({
           <span className="summary__value">{formatDuration(totalTime)}</span>
         </div>
         <div className="summary__stat">
-          <span className="summary__label">実行ラウンド</span>
+          <span className="summary__label">実行セット</span>
+          <span className="summary__value">{totalSets} セット</span>
+        </div>
+        <div className="summary__stat">
+          <span className="summary__label">セット内ラウンド</span>
+          <span className="summary__value">{roundsPerSet} ラウンド</span>
+        </div>
+        <div className="summary__stat">
+          <span className="summary__label">総ラウンド</span>
           <span className="summary__value">{totalRounds} ラウンド</span>
         </div>
       </div>

@@ -7,8 +7,12 @@ export interface TimerConfig {
   workoutSeconds: number;
   /** 休憩時間（秒） 1〜600 */
   restSeconds: number;
+  /** セット数 1〜99 */
+  sets: number;
   /** ラウンド数 1〜99 */
   rounds: number;
+  /** セット間休憩時間（秒） 0〜600 */
+  betweenSetsRestSeconds: number;
   /** ワークアウト用YouTube URL */
   workoutUrl: string;
   /** 休憩用YouTube URL */
@@ -18,6 +22,9 @@ export interface TimerConfig {
 /** タイマー状態 */
 export interface TimerState {
   phase: Phase;
+  /** 現在のセット番号（idle時は0、実行中は1始まり） */
+  currentSet: number;
+  /** 現在セット内のラウンド番号（idle時は0、実行中は1始まり） */
   currentRound: number;
   timeLeft: number;
   isRunning: boolean;
@@ -43,7 +50,9 @@ export type TimerAction =
 export const DEFAULT_CONFIG: TimerConfig = {
   workoutSeconds: 30,
   restSeconds: 15,
+  sets: 1,
   rounds: 8,
+  betweenSetsRestSeconds: 0,
   workoutUrl: '',
   restUrl: '',
 };

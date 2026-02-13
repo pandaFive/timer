@@ -9,7 +9,9 @@ const STORAGE_KEY = 'hiit-timer-config';
 interface ValidationErrors {
   workoutSeconds?: string;
   restSeconds?: string;
+  sets?: string;
   rounds?: string;
+  betweenSetsRestSeconds?: string;
   workoutUrl?: string;
   restUrl?: string;
 }
@@ -24,17 +26,37 @@ function loadConfig(): TimerConfig {
     if (!parsed || typeof parsed !== 'object') return DEFAULT_CONFIG;
 
     const obj = parsed as Record<string, unknown>;
+
+    /** 数値フィールドの安全な復元（NaN/Infinity/範囲外はデフォルト値） */
+    const safeInt = (
+      val: unknown,
+      min: number,
+      max: number,
+      fallback: number,
+    ): number =>
+      typeof val === 'number' &&
+      Number.isFinite(val) &&
+      val >= min &&
+      val <= max
+        ? Math.round(val)
+        : fallback;
+
     const config: TimerConfig = {
-      workoutSeconds:
-        typeof obj.workoutSeconds === 'number'
-          ? obj.workoutSeconds
-          : DEFAULT_CONFIG.workoutSeconds,
-      restSeconds:
-        typeof obj.restSeconds === 'number'
-          ? obj.restSeconds
-          : DEFAULT_CONFIG.restSeconds,
-      rounds:
-        typeof obj.rounds === 'number' ? obj.rounds : DEFAULT_CONFIG.rounds,
+      workoutSeconds: safeInt(
+        obj.workoutSeconds,
+        1,
+        600,
+        DEFAULT_CONFIG.workoutSeconds,
+      ),
+      restSeconds: safeInt(obj.restSeconds, 1, 600, DEFAULT_CONFIG.restSeconds),
+      sets: safeInt(obj.sets, 1, 99, DEFAULT_CONFIG.sets),
+      rounds: safeInt(obj.rounds, 1, 99, DEFAULT_CONFIG.rounds),
+      betweenSetsRestSeconds: safeInt(
+        obj.betweenSetsRestSeconds,
+        0,
+        600,
+        DEFAULT_CONFIG.betweenSetsRestSeconds,
+      ),
       workoutUrl:
         typeof obj.workoutUrl === 'string'
           ? obj.workoutUrl
@@ -77,12 +99,22 @@ function validate(config: TimerConfig): ValidationErrors {
   ) {
     errors.restSeconds = '1〜600の整数を入力してください';
   }
+  if (config.sets < 1 || config.sets > 99 || !Number.isInteger(config.sets)) {
+    errors.sets = '1〜99の整数を入力してください';
+  }
   if (
     config.rounds < 1 ||
     config.rounds > 99 ||
     !Number.isInteger(config.rounds)
   ) {
     errors.rounds = '1〜99の整数を入力してください';
+  }
+  if (
+    config.betweenSetsRestSeconds < 0 ||
+    config.betweenSetsRestSeconds > 600 ||
+    !Number.isInteger(config.betweenSetsRestSeconds)
+  ) {
+    errors.betweenSetsRestSeconds = '0〜600の整数を入力してください';
   }
   if (config.workoutUrl && !extractVideoId(config.workoutUrl)) {
     errors.workoutUrl = '有効なYouTube URLを入力してください';
@@ -111,7 +143,13 @@ export function Settings({ disabled, onStart }: SettingsProps) {
   const handleChange = useCallback(
     (field: keyof TimerConfig, value: string) => {
       setConfig((prev) => {
-        const numFields = ['workoutSeconds', 'restSeconds', 'rounds'] as const;
+        const numFields = [
+          'workoutSeconds',
+          'restSeconds',
+          'sets',
+          'rounds',
+          'betweenSetsRestSeconds',
+        ] as const;
         if ((numFields as readonly string[]).includes(field)) {
           return { ...prev, [field]: parseInt(value, 10) || 0 };
         }
@@ -176,6 +214,24 @@ export function Settings({ disabled, onStart }: SettingsProps) {
         </div>
 
         <div className="settings__field">
+          <label htmlFor="sets">セット数</label>
+          <input
+            id="sets"
+            type="number"
+            min={1}
+            max={99}
+            value={config.sets}
+            onChange={(e) => handleChange('sets', e.target.value)}
+            disabled={disabled}
+          />
+          {errors.sets && (
+            <span className="settings__error" role="alert">
+              {errors.sets}
+            </span>
+          )}
+        </div>
+
+        <div className="settings__field">
           <label htmlFor="rounds">ラウンド数</label>
           <input
             id="rounds"
@@ -189,6 +245,26 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           {errors.rounds && (
             <span className="settings__error" role="alert">
               {errors.rounds}
+            </span>
+          )}
+        </div>
+
+        <div className="settings__field">
+          <label htmlFor="betweenSetsRestSeconds">セット間休憩（秒）</label>
+          <input
+            id="betweenSetsRestSeconds"
+            type="number"
+            min={0}
+            max={600}
+            value={config.betweenSetsRestSeconds}
+            onChange={(e) =>
+              handleChange('betweenSetsRestSeconds', e.target.value)
+            }
+            disabled={disabled}
+          />
+          {errors.betweenSetsRestSeconds && (
+            <span className="settings__error" role="alert">
+              {errors.betweenSetsRestSeconds}
             </span>
           )}
         </div>

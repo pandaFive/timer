@@ -293,6 +293,7 @@ button:focus-visible {
   opacity: 0.85;
 }
 
+.timer-display__set,
 .timer-display__round {
   font-size: var(--text-sm);
   font-weight: 500;

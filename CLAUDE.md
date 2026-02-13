@@ -31,8 +31,11 @@ App.tsx（オーケストレータ）
 └── useCallback で3つのhookを連携（onCountdownTick, onPhaseChange）
 ```
 
-- **App.tsx** がphaseに基づきSettings / Timer画面（TimerDisplay + Controls + YouTubePlayer）/ Summary を切り替え
-- **useTimer** の状態遷移: `idle → workout ⇄ rest → completed`（最終ラウンドのrestはスキップ）
+- **App.tsx** がphaseに基づきSettings / Timer画面（TimerDisplay + Controls）/ Summary を切り替え
+- **useTimer** の状態遷移: `idle → [workout ⇄ rest] × rounds × sets → completed`
+  - セット内: `workout → rest → workout → ...`（最終ラウンドのrestはスキップ）
+  - セット間: 最終ラウンドworkout後 → セット間休憩（`betweenSetsRestSeconds`）→ 次セット先頭
+  - 最終セット最終ラウンドworkout後 → rest無しで `completed`
 - タイマーは `setInterval(200ms)` + `Date.now()` ベースの実時間計算（バックグラウンドタブ復帰時のキャッチアップアルゴリズムあり）
 - Settings は localStorage（`hiit-timer-config`）に永続化、破損データはDEFAULT_CONFIGにフォールバック
 
@@ -55,3 +58,16 @@ App.tsx（オーケストレータ）
 
 - `src/utils/youtube.ts`: YouTube URLバリデーションはHTTPS強制 + ホスト名許可リスト + videoId正規表現の3層。変更時はセキュリティテストケース（プロトコル偽装、サブドメインスプーフィング、XSS）を維持すること
 - GitHub Actions: アクションはコミットSHAで固定（`.github/workflows/ci.yml`）
+
+## セッション継続
+
+作業を開始するときは、まず以下を読むこと
+
+- 'docs/todo/TODO.md' - 未着手タスクと進捗
+- 'docs/lessons.md' - 過去の失敗と学び
+
+変更があった場合、上記を更新すること。
+
+## チーム編成
+
+セッション継続の情報をもとに、チーム編成（最大３人）を行い並列作業せよ
