@@ -132,6 +132,29 @@ describe('App 統合テスト', () => {
     expect(screen.getByText('スタート')).toBeInTheDocument();
   });
 
+  it('設定フォームでラウンド数がセット数より先に表示される', () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const form = screen.getByText('スタート').closest('form');
+    expect(form).not.toBeNull();
+
+    const firstFieldGroup = form?.querySelector('.settings__field-group');
+    expect(firstFieldGroup).not.toBeNull();
+
+    const labels = Array.from(firstFieldGroup?.querySelectorAll('label') ?? [])
+      .map((label) => label.textContent?.trim())
+      .filter((text): text is string => !!text);
+
+    expect(labels).toEqual([
+      'ワークアウト（秒）',
+      '休憩（秒）',
+      'ラウンド数',
+      'セット数',
+      'セット間休憩（秒）',
+    ]);
+  });
+
   it('スタートボタンでタイマーが開始される', async () => {
     setupGlobalMocks();
     render(<App />);

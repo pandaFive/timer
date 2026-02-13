@@ -5,6 +5,9 @@
 - [x] `useCountdownVoice` のセクション案内失敗耐性を強化
   - ファイル: `src/hooks/useCountdownVoice.ts`, `tests/hooks/useCountdownVoice.test.ts`
   - 内容: `speakSectionStart` に `onerror` と `try-catch` を追加。型エクスポート、英語音声フォールバック、失敗系テストを拡充
+- [x] 設定画面の `ラウンド数` / `セット数` 表示順を入れ替え
+  - ファイル: `src/components/Settings.tsx`, `tests/integration/App.test.tsx`
+  - 内容: 表示順を `ラウンド数` → `セット数` に変更し、表示順テストを追加
 
 ## Low Priority (レビュー日: 2026-02-13)
 

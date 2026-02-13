@@ -214,24 +214,6 @@ export function Settings({ disabled, onStart }: SettingsProps) {
         </div>
 
         <div className="settings__field">
-          <label htmlFor="sets">セット数</label>
-          <input
-            id="sets"
-            type="number"
-            min={1}
-            max={99}
-            value={config.sets}
-            onChange={(e) => handleChange('sets', e.target.value)}
-            disabled={disabled}
-          />
-          {errors.sets && (
-            <span className="settings__error" role="alert">
-              {errors.sets}
-            </span>
-          )}
-        </div>
-
-        <div className="settings__field">
           <label htmlFor="rounds">ラウンド数</label>
           <input
             id="rounds"
@@ -245,6 +227,24 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           {errors.rounds && (
             <span className="settings__error" role="alert">
               {errors.rounds}
+            </span>
+          )}
+        </div>
+
+        <div className="settings__field">
+          <label htmlFor="sets">セット数</label>
+          <input
+            id="sets"
+            type="number"
+            min={1}
+            max={99}
+            value={config.sets}
+            onChange={(e) => handleChange('sets', e.target.value)}
+            disabled={disabled}
+          />
+          {errors.sets && (
+            <span className="settings__error" role="alert">
+              {errors.sets}
             </span>
           )}
         </div>
