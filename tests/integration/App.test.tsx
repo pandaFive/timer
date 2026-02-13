@@ -660,6 +660,50 @@ describe('App 統合テスト', () => {
     expect(stored.presets).toHaveLength(1);
     expect(stored.presets[0].id).toBe('preset-existing');
     expect(stored.presets[0].name).toBe('既存プリセット');
+    expect(localStorage.getItem('hiit-timer-config')).toBeNull();
+  });
+
+  it('presets がある場合はdraft欠損でもlegacyへフォールバックしない', () => {
+    localStorage.setItem(
+      'hiit-timer-presets',
+      JSON.stringify({
+        presets: [
+          {
+            id: 'preset-existing',
+            name: '既存プリセット',
+            config: {
+              workoutSeconds: 33,
+              restSeconds: 10,
+              sets: 1,
+              rounds: 4,
+              betweenSetsRestSeconds: 0,
+              workoutUrl: '',
+              restUrl: '',
+            },
+            createdAt: 100,
+          },
+        ],
+      }),
+    );
+    localStorage.setItem(
+      'hiit-timer-config',
+      JSON.stringify({
+        workoutSeconds: 99,
+        restSeconds: 99,
+        sets: 9,
+        rounds: 9,
+        betweenSetsRestSeconds: 9,
+        workoutUrl: '',
+        restUrl: '',
+      }),
+    );
+    setupGlobalMocks();
+    render(<App />);
+
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
+    expect(workoutInput.value).toBe('30');
   });
 
   it('draft破損時はlegacy設定へフォールバックする', () => {
@@ -719,6 +763,53 @@ describe('App 統合テスト', () => {
     ).toBeInTheDocument();
     const select = screen.getByLabelText('保存済み設定') as HTMLSelectElement;
     expect(select.options).toHaveLength(1);
+  });
+
+  it('初期状態復元で予期しない例外が発生してもクラッシュしない', () => {
+    const originalGetItem = Storage.prototype.getItem;
+    let thrown = false;
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+    ) {
+      if (!thrown) {
+        thrown = true;
+        throw new TypeError('unexpected');
+      }
+      return originalGetItem.call(this, key);
+    });
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    setupGlobalMocks();
+    render(<App />);
+
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
+    expect(workoutInput.value).toBe('30');
+    expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it('プリセット保存成功後に読み込み警告をクリアする', async () => {
+    localStorage.setItem('hiit-timer-presets', JSON.stringify({ foo: 'bar' }));
+    setupGlobalMocks();
+    render(<App />);
+
+    expect(
+      screen.getByText('保存済み設定の一部を読み込めませんでした'),
+    ).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText('プリセット名');
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: '警告クリア用' } });
+      fireEvent.click(screen.getByText('保存'));
+    });
+
+    expect(
+      screen.queryByText('保存済み設定の一部を読み込めませんでした'),
+    ).not.toBeInTheDocument();
   });
 
   it('プリセット保存の書き込み失敗時は成功表示しない', async () => {

@@ -17,6 +17,8 @@ const PRESET_SAVE_ERROR_MESSAGE =
 const PRESET_LOAD_WARNING_MESSAGE = '保存済み設定の一部を読み込めませんでした';
 const PRESET_LOAD_ERROR_MESSAGE = '保存済み設定の読み込みに失敗しました';
 const LEGACY_MIGRATION_ERROR_MESSAGE = '旧設定の移行に失敗しました';
+const INITIAL_LOAD_ERROR_MESSAGE =
+  '設定の初期化に失敗しました。デフォルト設定を使用します';
 
 interface PresetStore {
   presets: TimerPreset[];
@@ -163,13 +165,21 @@ function loadLegacyConfig(): TimerConfig | null {
 function loadDraftConfig(): TimerConfig {
   try {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return loadLegacyConfig() ?? DEFAULT_CONFIG;
+    const hasPresetsKey = localStorage.getItem(PRESETS_STORAGE_KEY) !== null;
+    if (!raw) {
+      return hasPresetsKey
+        ? DEFAULT_CONFIG
+        : (loadLegacyConfig() ?? DEFAULT_CONFIG);
+    }
 
     return normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG);
   } catch (error: unknown) {
     if (error instanceof SyntaxError || isStorageAccessError(error)) {
       console.warn('下書き設定の読み込みに失敗しました:', error);
-      return loadLegacyConfig() ?? DEFAULT_CONFIG;
+      const hasPresetsKey = localStorage.getItem(PRESETS_STORAGE_KEY) !== null;
+      return hasPresetsKey
+        ? DEFAULT_CONFIG
+        : (loadLegacyConfig() ?? DEFAULT_CONFIG);
     }
     throw error;
   }
@@ -340,6 +350,14 @@ function createPresetId(): string {
 function migrateLegacyConfig(): MigrationResult {
   try {
     if (localStorage.getItem(PRESETS_STORAGE_KEY)) {
+      const removeLegacyResult = removeLegacyConfig();
+      if (!removeLegacyResult.ok) {
+        return {
+          ok: false,
+          migrated: false,
+          message: removeLegacyResult.message,
+        };
+      }
       return { ok: true, migrated: false, message: '' };
     }
 
@@ -398,12 +416,21 @@ function migrateLegacyConfig(): MigrationResult {
 
 /** 初期状態を復元 */
 function loadInitialState(): InitialState {
-  const presetsResult = loadPresets();
-  return {
-    config: loadDraftConfig(),
-    presets: presetsResult.presets,
-    warning: presetsResult.warning,
-  };
+  try {
+    const presetsResult = loadPresets();
+    return {
+      config: loadDraftConfig(),
+      presets: presetsResult.presets,
+      warning: presetsResult.warning,
+    };
+  } catch (error: unknown) {
+    console.error('初期状態の復元に失敗しました:', error);
+    return {
+      config: DEFAULT_CONFIG,
+      presets: [],
+      warning: INITIAL_LOAD_ERROR_MESSAGE,
+    };
+  }
 }
 
 /** 入力値のバリデーション */
@@ -501,19 +528,24 @@ export function Settings({ disabled, onStart }: SettingsProps) {
 
   // 初回マウント時に旧設定移行を実行
   useEffect(() => {
-    const migration = migrateLegacyConfig();
-    if (!migration.migrated) {
-      if (!migration.ok) setStorageError(migration.message);
-      return;
-    }
+    try {
+      const migration = migrateLegacyConfig();
+      if (!migration.migrated) {
+        if (!migration.ok) setStorageError(migration.message);
+        return;
+      }
 
-    const reloadedPresets = loadPresets();
-    setPresets(reloadedPresets.presets);
-    setStorageWarning(reloadedPresets.warning);
-    setConfig(loadDraftConfig());
+      const reloadedPresets = loadPresets();
+      setPresets(reloadedPresets.presets);
+      setStorageWarning(reloadedPresets.warning);
+      setConfig(loadDraftConfig());
 
-    if (!migration.ok) {
-      setStorageError(migration.message);
+      if (!migration.ok) {
+        setStorageError(migration.message);
+      }
+    } catch (error: unknown) {
+      console.error('移行処理で予期しないエラーが発生しました:', error);
+      setStorageError(LEGACY_MIGRATION_ERROR_MESSAGE);
     }
   }, []);
 
@@ -617,6 +649,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
 
     setPresets(nextPresets);
     setStorageError('');
+    setStorageWarning('');
     setSelectedPresetId(newPreset.id);
     setPresetName('');
     setPresetError('');
@@ -640,6 +673,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
     setConfig(cloneConfig(preset.config));
     setErrors({});
     setPresetError('');
+    setStorageWarning('');
     setStatusMessage('プリセットを読み込みました');
   }, [presets, selectedPresetId]);
 
@@ -668,6 +702,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
 
     setPresets(nextPresets);
     setStorageError('');
+    setStorageWarning('');
     setSelectedPresetId('');
     setPresetError('');
     setStatusMessage('プリセットを削除しました');

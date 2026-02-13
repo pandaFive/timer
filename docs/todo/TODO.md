@@ -2,6 +2,9 @@
 
 ## Recently Completed (2026-02-13)
 
+- [x] 初期化耐障害性と警告ライフサイクルを改善
+  - ファイル: `src/components/Settings.tsx`, `tests/integration/App.test.tsx`
+  - 内容: `loadInitialState` の予期しない例外をフォールバック処理化。プリセット保存成功時に `storageWarning` をクリアする挙動を追加し、回帰テストを拡充
 - [x] プリセット保存の信頼性と移行安全性を改善（PRレビュー対応）
   - ファイル: `src/components/Settings.tsx`, `src/types.ts`, `src/App.css`, `tests/integration/App.test.tsx`
   - 内容: localStorage書き込み失敗のユーザー通知、移行処理の冪等化と旧キー削除、参照共有回避、プリセット名サニタイズ、不足テスト9件+失敗系テストを追加
