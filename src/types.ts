@@ -21,16 +21,14 @@ export interface TimerConfig {
 
 /** 保存済み設定プリセット */
 export interface TimerPreset {
-  id: string;
-  name: string;
-  config: TimerConfig;
-  createdAt: number;
-  updatedAt: number;
-}
-
-/** プリセット保存ストア */
-export interface PresetStore {
-  presets: TimerPreset[];
+  /** 一意ID */
+  readonly id: string;
+  /** 表示名（1〜30文字、制御文字を除去した値） */
+  readonly name: string;
+  /** 保存時点の設定スナップショット */
+  readonly config: TimerConfig;
+  /** 作成日時（UNIXミリ秒） */
+  readonly createdAt: number;
 }
 
 /** タイマー状態 */

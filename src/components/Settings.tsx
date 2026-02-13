@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { PresetStore, TimerConfig, TimerPreset } from '../types';
+import type { TimerConfig, TimerPreset } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 import { extractVideoId } from '../utils/youtube';
 
@@ -8,6 +8,41 @@ const DRAFT_STORAGE_KEY = 'hiit-timer-draft';
 const PRESETS_STORAGE_KEY = 'hiit-timer-presets';
 const MAX_PRESETS = 3;
 const SAVE_STATUS_DURATION_MS = 2000;
+const PRESET_NAME_MAX_LENGTH = 30;
+
+const DRAFT_SAVE_ERROR_MESSAGE =
+  '下書き設定の保存に失敗しました。ブラウザ容量を確認してください';
+const PRESET_SAVE_ERROR_MESSAGE =
+  '保存済み設定の保存に失敗しました。ブラウザ容量を確認してください';
+const PRESET_LOAD_WARNING_MESSAGE = '保存済み設定の一部を読み込めませんでした';
+const PRESET_LOAD_ERROR_MESSAGE = '保存済み設定の読み込みに失敗しました';
+const LEGACY_MIGRATION_ERROR_MESSAGE = '旧設定の移行に失敗しました';
+
+interface PresetStore {
+  presets: TimerPreset[];
+}
+
+interface PresetLoadResult {
+  presets: TimerPreset[];
+  warning: string;
+}
+
+interface StorageWriteResult {
+  ok: boolean;
+  message: string;
+}
+
+interface MigrationResult {
+  ok: boolean;
+  migrated: boolean;
+  message: string;
+}
+
+interface InitialState {
+  config: TimerConfig;
+  presets: TimerPreset[];
+  warning: string;
+}
 
 /** バリデーションエラー */
 interface ValidationErrors {
@@ -18,6 +53,24 @@ interface ValidationErrors {
   betweenSetsRestSeconds?: string;
   workoutUrl?: string;
   restUrl?: string;
+}
+
+/** 設定を値コピーで複製 */
+function cloneConfig(config: TimerConfig): TimerConfig {
+  return {
+    workoutSeconds: config.workoutSeconds,
+    restSeconds: config.restSeconds,
+    sets: config.sets,
+    rounds: config.rounds,
+    betweenSetsRestSeconds: config.betweenSetsRestSeconds,
+    workoutUrl: config.workoutUrl,
+    restUrl: config.restUrl,
+  };
+}
+
+/** 制御文字を除去したプリセット名を返す */
+function sanitizePresetName(value: string): string {
+  return value.replace(/\p{C}+/gu, '').trim();
 }
 
 /** 数値フィールドの安全な復元（NaN/Infinity/範囲外はフォールバック） */
@@ -33,6 +86,14 @@ function safeInt(
     val <= max
     ? Math.round(val)
     : fallback;
+}
+
+/** 想定するストレージアクセスエラー */
+function isStorageAccessError(error: unknown): error is DOMException {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'SecurityError' || error.name === 'QuotaExceededError')
+  );
 }
 
 /** 不正値をフォールバックしながら設定を復元 */
@@ -65,18 +126,36 @@ function normalizeConfig(
   };
 }
 
+/** URL項目のみ安全側へ正規化 */
+function sanitizeUrls(config: TimerConfig): TimerConfig {
+  return {
+    ...config,
+    workoutUrl:
+      config.workoutUrl && extractVideoId(config.workoutUrl)
+        ? config.workoutUrl
+        : '',
+    restUrl:
+      config.restUrl && extractVideoId(config.restUrl) ? config.restUrl : '',
+  };
+}
+
 /** 旧単一設定の有効値のみを厳格に復元 */
 function loadLegacyConfig(): TimerConfig | null {
   try {
     const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return null;
 
-    const config = normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG);
+    const config = sanitizeUrls(
+      normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG),
+    );
     const errors = validate(config);
     return Object.keys(errors).length === 0 ? config : null;
-  } catch (e) {
-    console.warn('旧設定の読み込みに失敗しました:', e);
-    return null;
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError || isStorageAccessError(error)) {
+      console.warn('旧設定の読み込みに失敗しました:', error);
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -87,112 +166,244 @@ function loadDraftConfig(): TimerConfig {
     if (!raw) return loadLegacyConfig() ?? DEFAULT_CONFIG;
 
     return normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG);
-  } catch (e) {
-    console.warn('下書き設定の読み込みに失敗しました:', e);
-    return loadLegacyConfig() ?? DEFAULT_CONFIG;
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError || isStorageAccessError(error)) {
+      console.warn('下書き設定の読み込みに失敗しました:', error);
+      return loadLegacyConfig() ?? DEFAULT_CONFIG;
+    }
+    throw error;
+  }
+}
+
+/** 下書き設定キーが有効なJSONかどうかを判定 */
+function hasValidDraftConfig(): boolean {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return false;
+
+    const config = sanitizeUrls(
+      normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG),
+    );
+    return Object.keys(validate(config)).length === 0;
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError || isStorageAccessError(error)) {
+      console.warn('下書き設定キーが不正なため再生成します:', error);
+      return false;
+    }
+    throw error;
   }
 }
 
 /** プリセット配列をlocalStorageから復元 */
-function loadPresets(): TimerPreset[] {
+function loadPresets(): PresetLoadResult {
   try {
     const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) return { presets: [], warning: '' };
 
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return [];
+    if (!parsed || typeof parsed !== 'object') {
+      console.warn('プリセット形式が不正なため空配列で初期化します');
+      return { presets: [], warning: PRESET_LOAD_WARNING_MESSAGE };
+    }
 
     const store = parsed as { presets?: unknown };
-    if (!Array.isArray(store.presets)) return [];
+    if (!Array.isArray(store.presets)) {
+      console.warn('プリセット配列が不正なため空配列で初期化します');
+      return { presets: [], warning: PRESET_LOAD_WARNING_MESSAGE };
+    }
 
     const nameSet = new Set<string>();
     const result: TimerPreset[] = [];
+    let droppedCount = 0;
 
     for (const preset of store.presets) {
-      if (result.length >= MAX_PRESETS) break;
-      if (!preset || typeof preset !== 'object') continue;
-
-      const obj = preset as Record<string, unknown>;
-      if (
-        typeof obj.id !== 'string' ||
-        typeof obj.name !== 'string' ||
-        typeof obj.createdAt !== 'number' ||
-        typeof obj.updatedAt !== 'number'
-      ) {
+      if (result.length >= MAX_PRESETS) {
+        droppedCount += 1;
+        continue;
+      }
+      if (!preset || typeof preset !== 'object') {
+        droppedCount += 1;
         continue;
       }
 
-      const name = obj.name.trim();
-      if (name.length < 1 || name.length > 30) continue;
-      const normalizedName = name.toLowerCase();
-      if (nameSet.has(normalizedName)) continue;
+      const obj = preset as Record<string, unknown>;
+      if (typeof obj.id !== 'string' || typeof obj.createdAt !== 'number') {
+        droppedCount += 1;
+        continue;
+      }
 
-      const config = normalizeConfig(obj.config, DEFAULT_CONFIG);
-      if (Object.keys(validate(config)).length > 0) continue;
+      const name = sanitizePresetName(
+        typeof obj.name === 'string' ? obj.name : '',
+      );
+      if (name.length < 1 || name.length > PRESET_NAME_MAX_LENGTH) {
+        droppedCount += 1;
+        continue;
+      }
+
+      const normalizedName = name.toLowerCase();
+      if (nameSet.has(normalizedName)) {
+        droppedCount += 1;
+        continue;
+      }
+
+      const config = sanitizeUrls(normalizeConfig(obj.config, DEFAULT_CONFIG));
+      if (Object.keys(validate(config)).length > 0) {
+        droppedCount += 1;
+        continue;
+      }
 
       nameSet.add(normalizedName);
       result.push({
         id: obj.id,
         name,
-        config,
+        config: cloneConfig(config),
         createdAt: obj.createdAt,
-        updatedAt: obj.updatedAt,
       });
     }
 
-    return result;
-  } catch (e) {
-    console.warn('プリセットの読み込みに失敗しました:', e);
-    return [];
+    if (droppedCount > 0) {
+      console.warn(
+        `不正なプリセットを ${droppedCount} 件スキップしました（保持: ${result.length} 件）`,
+      );
+      return { presets: result, warning: PRESET_LOAD_WARNING_MESSAGE };
+    }
+
+    return { presets: result, warning: '' };
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError || isStorageAccessError(error)) {
+      console.warn('プリセットの読み込みに失敗しました:', error);
+      return { presets: [], warning: PRESET_LOAD_ERROR_MESSAGE };
+    }
+    throw error;
   }
 }
 
 /** 下書き設定をlocalStorageに保存 */
-function saveDraftConfig(config: TimerConfig): void {
+function saveDraftConfig(config: TimerConfig): StorageWriteResult {
   try {
-    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(config));
-  } catch (e) {
-    console.warn('下書き設定の保存に失敗しました:', e);
+    localStorage.setItem(
+      DRAFT_STORAGE_KEY,
+      JSON.stringify(cloneConfig(config)),
+    );
+    return { ok: true, message: '' };
+  } catch (error: unknown) {
+    if (isStorageAccessError(error)) {
+      console.warn('下書き設定の保存に失敗しました:', error);
+      return { ok: false, message: DRAFT_SAVE_ERROR_MESSAGE };
+    }
+    throw error;
   }
 }
 
 /** プリセット配列をlocalStorageに保存 */
-function savePresets(presets: TimerPreset[]): void {
+function savePresets(presets: TimerPreset[]): StorageWriteResult {
   try {
     const store: PresetStore = { presets };
     localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(store));
-  } catch (e) {
-    console.warn('プリセットの保存に失敗しました:', e);
+    return { ok: true, message: '' };
+  } catch (error: unknown) {
+    if (isStorageAccessError(error)) {
+      console.warn('プリセットの保存に失敗しました:', error);
+      return { ok: false, message: PRESET_SAVE_ERROR_MESSAGE };
+    }
+    throw error;
   }
 }
 
-/** 旧単一設定をプリセット形式へ互換移行 */
-function migrateLegacyConfig(): void {
+/** 旧単一設定キーを削除 */
+function removeLegacyConfig(): StorageWriteResult {
   try {
-    if (localStorage.getItem(PRESETS_STORAGE_KEY)) return;
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return { ok: true, message: '' };
+  } catch (error: unknown) {
+    if (isStorageAccessError(error)) {
+      console.warn('旧設定キーの削除に失敗しました:', error);
+      return { ok: false, message: LEGACY_MIGRATION_ERROR_MESSAGE };
+    }
+    throw error;
+  }
+}
+
+/** プリセットIDを生成 */
+function createPresetId(): string {
+  if (
+    typeof globalThis.crypto !== 'undefined' &&
+    typeof globalThis.crypto.randomUUID === 'function'
+  ) {
+    return `preset-${globalThis.crypto.randomUUID()}`;
+  }
+
+  return `preset-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** 旧単一設定をプリセット形式へ互換移行 */
+function migrateLegacyConfig(): MigrationResult {
+  try {
+    if (localStorage.getItem(PRESETS_STORAGE_KEY)) {
+      return { ok: true, migrated: false, message: '' };
+    }
 
     const legacyConfig = loadLegacyConfig();
-    if (!legacyConfig) {
-      savePresets([]);
-      return;
-    }
-
     const now = Date.now();
-    const preset: TimerPreset = {
-      id: `legacy-${now}`,
-      name: '既存設定',
-      config: legacyConfig,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const migratedPresets: TimerPreset[] = legacyConfig
+      ? [
+          {
+            id: `legacy-${now}`,
+            name: '既存設定',
+            config: cloneConfig(legacyConfig),
+            createdAt: now,
+          },
+        ]
+      : [];
 
-    savePresets([preset]);
-    if (!localStorage.getItem(DRAFT_STORAGE_KEY)) {
-      saveDraftConfig(legacyConfig);
+    const presetSaveResult = savePresets(migratedPresets);
+    if (!presetSaveResult.ok) {
+      return { ok: false, migrated: false, message: presetSaveResult.message };
     }
-  } catch (e) {
-    console.warn('旧設定の移行に失敗しました:', e);
+
+    let writeWarning = '';
+    if (legacyConfig && !hasValidDraftConfig()) {
+      const draftSaveResult = saveDraftConfig(legacyConfig);
+      if (!draftSaveResult.ok) {
+        writeWarning = draftSaveResult.message;
+      }
+    }
+
+    const removeLegacyResult = removeLegacyConfig();
+    if (!removeLegacyResult.ok) {
+      return {
+        ok: false,
+        migrated: true,
+        message: removeLegacyResult.message,
+      };
+    }
+
+    if (writeWarning) {
+      return { ok: false, migrated: true, message: writeWarning };
+    }
+
+    return { ok: true, migrated: true, message: '' };
+  } catch (error: unknown) {
+    if (isStorageAccessError(error)) {
+      console.warn('旧設定の移行に失敗しました:', error);
+      return {
+        ok: false,
+        migrated: false,
+        message: LEGACY_MIGRATION_ERROR_MESSAGE,
+      };
+    }
+    throw error;
   }
+}
+
+/** 初期状態を復元 */
+function loadInitialState(): InitialState {
+  const presetsResult = loadPresets();
+  return {
+    config: loadDraftConfig(),
+    presets: presetsResult.presets,
+    warning: presetsResult.warning,
+  };
 }
 
 /** 入力値のバリデーション */
@@ -242,20 +453,31 @@ function validate(config: TimerConfig): ValidationErrors {
 
 /** プリセット名のバリデーション */
 function validatePresetName(
-  name: string,
+  rawName: string,
   presets: TimerPreset[],
-): string | null {
-  const trimmed = name.trim();
-  if (trimmed.length < 1) return 'プリセット名を入力してください';
-  if (trimmed.length > 30) return 'プリセット名は30文字以内で入力してください';
+): { name: string; error: string | null } {
+  const name = sanitizePresetName(rawName);
 
-  const normalizedName = trimmed.toLowerCase();
+  if (name.length < 1) {
+    return { name, error: 'プリセット名を入力してください' };
+  }
+  if (name.length > PRESET_NAME_MAX_LENGTH) {
+    return {
+      name,
+      error: `プリセット名は${PRESET_NAME_MAX_LENGTH}文字以内で入力してください`,
+    };
+  }
+
+  const normalizedName = name.toLowerCase();
   const duplicated = presets.some(
-    (preset) => preset.name.toLowerCase() === normalizedName,
+    (preset) =>
+      sanitizePresetName(preset.name).toLowerCase() === normalizedName,
   );
-  if (duplicated) return '同名のプリセットが既に存在します';
+  if (duplicated) {
+    return { name, error: '同名のプリセットが既に存在します' };
+  }
 
-  return null;
+  return { name, error: null };
 }
 
 interface SettingsProps {
@@ -264,23 +486,46 @@ interface SettingsProps {
 }
 
 export function Settings({ disabled, onStart }: SettingsProps) {
-  const [config, setConfig] = useState<TimerConfig>(() => {
-    migrateLegacyConfig();
-    return loadDraftConfig();
-  });
-  const [presets, setPresets] = useState<TimerPreset[]>(() => {
-    migrateLegacyConfig();
-    return loadPresets();
-  });
+  const [initialState] = useState<InitialState>(loadInitialState);
+  const [config, setConfig] = useState<TimerConfig>(() =>
+    cloneConfig(initialState.config),
+  );
+  const [presets, setPresets] = useState<TimerPreset[]>(initialState.presets);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [presetName, setPresetName] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [presetError, setPresetError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [storageWarning, setStorageWarning] = useState(initialState.warning);
+  const [storageError, setStorageError] = useState('');
+
+  // 初回マウント時に旧設定移行を実行
+  useEffect(() => {
+    const migration = migrateLegacyConfig();
+    if (!migration.migrated) {
+      if (!migration.ok) setStorageError(migration.message);
+      return;
+    }
+
+    const reloadedPresets = loadPresets();
+    setPresets(reloadedPresets.presets);
+    setStorageWarning(reloadedPresets.warning);
+    setConfig(loadDraftConfig());
+
+    if (!migration.ok) {
+      setStorageError(migration.message);
+    }
+  }, []);
 
   // 下書き設定の自動保存
   useEffect(() => {
-    saveDraftConfig(config);
+    const saveResult = saveDraftConfig(config);
+    if (!saveResult.ok) {
+      setStorageError(saveResult.message);
+      return;
+    }
+
+    setStorageError((prev) => (prev === DRAFT_SAVE_ERROR_MESSAGE ? '' : prev));
   }, [config]);
 
   // ステータスメッセージを一定時間で消す
@@ -336,7 +581,10 @@ export function Settings({ disabled, onStart }: SettingsProps) {
       return;
     }
 
-    const nameError = validatePresetName(presetName, presets);
+    const { name: sanitizedName, error: nameError } = validatePresetName(
+      presetName,
+      presets,
+    );
     if (nameError) {
       setPresetError(nameError);
       setStatusMessage('');
@@ -353,16 +601,22 @@ export function Settings({ disabled, onStart }: SettingsProps) {
 
     const now = Date.now();
     const newPreset: TimerPreset = {
-      id: `preset-${now}-${Math.random().toString(36).slice(2, 8)}`,
-      name: presetName.trim(),
-      config,
+      id: createPresetId(),
+      name: sanitizedName,
+      config: cloneConfig(config),
       createdAt: now,
-      updatedAt: now,
     };
     const nextPresets = [...presets, newPreset];
 
+    const saveResult = savePresets(nextPresets);
+    if (!saveResult.ok) {
+      setStorageError(saveResult.message);
+      setStatusMessage('');
+      return;
+    }
+
     setPresets(nextPresets);
-    savePresets(nextPresets);
+    setStorageError('');
     setSelectedPresetId(newPreset.id);
     setPresetName('');
     setPresetError('');
@@ -383,7 +637,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
       return;
     }
 
-    setConfig(preset.config);
+    setConfig(cloneConfig(preset.config));
     setErrors({});
     setPresetError('');
     setStatusMessage('プリセットを読み込みました');
@@ -405,8 +659,15 @@ export function Settings({ disabled, onStart }: SettingsProps) {
       return;
     }
 
+    const saveResult = savePresets(nextPresets);
+    if (!saveResult.ok) {
+      setStorageError(saveResult.message);
+      setStatusMessage('');
+      return;
+    }
+
     setPresets(nextPresets);
-    savePresets(nextPresets);
+    setStorageError('');
     setSelectedPresetId('');
     setPresetError('');
     setStatusMessage('プリセットを削除しました');
@@ -552,7 +813,7 @@ export function Settings({ disabled, onStart }: SettingsProps) {
           <input
             id="presetName"
             type="text"
-            maxLength={30}
+            maxLength={PRESET_NAME_MAX_LENGTH}
             value={presetName}
             onChange={(e) => {
               setPresetName(e.target.value);
@@ -606,11 +867,21 @@ export function Settings({ disabled, onStart }: SettingsProps) {
         </div>
       </div>
 
-      {(presetError || statusMessage) && (
+      {(presetError || storageError || storageWarning || statusMessage) && (
         <div className="settings__field">
           {presetError && (
             <span className="settings__error" role="alert">
               {presetError}
+            </span>
+          )}
+          {storageError && (
+            <span className="settings__error" role="alert">
+              {storageError}
+            </span>
+          )}
+          {storageWarning && (
+            <span className="settings__warning" role="alert">
+              {storageWarning}
             </span>
           )}
           {statusMessage && (

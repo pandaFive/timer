@@ -2,6 +2,9 @@
 
 ## Recently Completed (2026-02-13)
 
+- [x] プリセット保存の信頼性と移行安全性を改善（PRレビュー対応）
+  - ファイル: `src/components/Settings.tsx`, `src/types.ts`, `src/App.css`, `tests/integration/App.test.tsx`
+  - 内容: localStorage書き込み失敗のユーザー通知、移行処理の冪等化と旧キー削除、参照共有回避、プリセット名サニタイズ、不足テスト9件+失敗系テストを追加
 - [x] 設定プリセット保存（最大3件）と下書き自動保存を分離
   - ファイル: `src/components/Settings.tsx`, `src/types.ts`, `src/App.css`, `tests/integration/App.test.tsx`, `README.md`
   - 内容: `hiit-timer-draft`（自動保存）と `hiit-timer-presets`（名前付き3件）を追加。保存/読込/削除UI、旧`hiit-timer-config`からの互換移行、統合テストを実装
