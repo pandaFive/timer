@@ -67,7 +67,7 @@ describe('useTimer', () => {
       );
       act(() => result.current.start(defaultConfig));
 
-      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1, 1);
     });
   });
 
@@ -105,7 +105,7 @@ describe('useTimer', () => {
       expect(result.current.state.phase).toBe('rest');
       expect(result.current.state.timeLeft).toBe(5);
       expect(result.current.state.currentRound).toBe(1);
-      expect(onPhaseChange).toHaveBeenCalledWith('rest', 1);
+      expect(onPhaseChange).toHaveBeenCalledWith('rest', 1, 1);
     });
 
     it('restフェーズ終了後に次のworkoutフェーズに遷移する', () => {
@@ -124,7 +124,7 @@ describe('useTimer', () => {
       expect(result.current.state.phase).toBe('workout');
       expect(result.current.state.currentRound).toBe(2);
       expect(result.current.state.timeLeft).toBe(10);
-      expect(onPhaseChange).toHaveBeenCalledWith('workout', 2);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1, 2);
     });
 
     it('最終ラウンドのworkout後にcompletedに遷移する', () => {
@@ -143,7 +143,7 @@ describe('useTimer', () => {
 
       expect(result.current.state.phase).toBe('completed');
       expect(result.current.state.isRunning).toBe(false);
-      expect(onPhaseChange).toHaveBeenCalledWith('completed', 1);
+      expect(onPhaseChange).toHaveBeenCalledWith('completed', 1, 1);
     });
 
     it('最終ラウンドのrest後にcompletedに遷移する', () => {
@@ -343,7 +343,7 @@ describe('useTimer', () => {
 
       expect(result.current.state.phase).toBe('rest');
       expect(result.current.state.timeLeft).toBe(5);
-      expect(onPhaseChange).toHaveBeenCalledWith('rest', 1);
+      expect(onPhaseChange).toHaveBeenCalledWith('rest', 1, 1);
     });
 
     it('restフェーズをスキップして次のworkoutフェーズに遷移する', () => {
@@ -363,7 +363,7 @@ describe('useTimer', () => {
 
       expect(result.current.state.phase).toBe('workout');
       expect(result.current.state.currentRound).toBe(2);
-      expect(onPhaseChange).toHaveBeenCalledWith('workout', 2);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1, 2);
     });
 
     it('最終ラウンドのworkoutスキップでcompletedに遷移する', () => {
@@ -624,7 +624,7 @@ describe('useTimer', () => {
       expect(result.current.state.currentSet).toBe(1);
       expect(result.current.state.currentRound).toBe(2);
       expect(result.current.state.timeLeft).toBe(7);
-      expect(onPhaseChange).toHaveBeenCalledWith('rest', 2);
+      expect(onPhaseChange).toHaveBeenCalledWith('rest', 1, 2);
 
       // セット間休憩完了で次セット先頭ラウンドへ
       currentTime += 7000;
@@ -636,7 +636,7 @@ describe('useTimer', () => {
       expect(result.current.state.currentSet).toBe(2);
       expect(result.current.state.currentRound).toBe(1);
       expect(result.current.state.timeLeft).toBe(10);
-      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 2, 1);
     });
 
     it('セット間休憩が0秒の場合、最終ラウンド後に即次セットへ遷移する', () => {
@@ -662,7 +662,7 @@ describe('useTimer', () => {
       expect(result.current.state.currentSet).toBe(2);
       expect(result.current.state.currentRound).toBe(1);
       expect(result.current.state.timeLeft).toBe(10);
-      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 2, 1);
     });
   });
 });

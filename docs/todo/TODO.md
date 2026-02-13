@@ -1,5 +1,11 @@
 # TODO
 
+## Recently Completed (2026-02-13)
+
+- [x] `useCountdownVoice` のセクション案内失敗耐性を強化
+  - ファイル: `src/hooks/useCountdownVoice.ts`, `tests/hooks/useCountdownVoice.test.ts`
+  - 内容: `speakSectionStart` に `onerror` と `try-catch` を追加。型エクスポート、英語音声フォールバック、失敗系テストを拡充
+
 ## Low Priority (レビュー日: 2026-02-13)
 
 - [ ] `--color-completed-start/end` を `var(--color-accent)` / `var(--color-accent-hover)` 参照に変更
@@ -28,7 +34,7 @@
 
 ## High Priority — 巨大な修正（レビュー日: 2026-02-13）
 
-- [ ] `onPhaseChange` コールバックに `set` パラメータを追加
+- [x] `onPhaseChange` コールバックに `set` パラメータを追加（完了: 2026-02-13）
   - ファイル: `src/hooks/useTimer.ts`, `src/types.ts`, `src/App.tsx`, テストファイル
   - 影響範囲: useTimer API、App.tsx の音楽切り替えロジック、全テスト
   - 修正方針: `onPhaseChange(phase, round)` → `onPhaseChange(phase, set, round)` に変更。App.tsx で `round >= config.rounds` による推論を `set` パラメータ直接参照に置換

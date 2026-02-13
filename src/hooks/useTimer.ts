@@ -6,7 +6,7 @@ interface UseTimerOptions {
   /** カウントダウン時のコールバック（残り3, 2, 1秒） */
   onCountdownTick?: (secondsLeft: 3 | 2 | 1) => void;
   /** フェーズ遷移時のコールバック */
-  onPhaseChange?: (phase: Phase, round: number) => void;
+  onPhaseChange?: (phase: Phase, set: number, round: number) => void;
 }
 
 /** タイマーフックの戻り値 */
@@ -458,7 +458,7 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
       currentRound !== prevRoundRef.current
     ) {
       if (phase !== 'idle' || prevPhaseRef.current !== 'idle') {
-        onPhaseChangeRef.current?.(phase, currentRound);
+        onPhaseChangeRef.current?.(phase, currentSet, currentRound);
       }
       // フェーズ変更時にカウントダウン状態をリセット
       lastAnnouncedRef.current = 0;
