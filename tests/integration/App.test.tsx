@@ -109,7 +109,9 @@ describe('App 統合テスト', () => {
     expect(screen.getByText('HIIT インターバルタイマー')).toBeInTheDocument();
     expect(screen.getByLabelText('ワークアウト（秒）')).toBeInTheDocument();
     expect(screen.getByLabelText('休憩（秒）')).toBeInTheDocument();
+    expect(screen.getByLabelText('セット数')).toBeInTheDocument();
     expect(screen.getByLabelText('ラウンド数')).toBeInTheDocument();
+    expect(screen.getByLabelText('セット間休憩（秒）')).toBeInTheDocument();
     expect(screen.getByText('スタート')).toBeInTheDocument();
   });
 
@@ -136,6 +138,18 @@ describe('App 統合テスト', () => {
     expect(screen.getByLabelText('一時停止')).toBeInTheDocument();
     expect(screen.getByLabelText('スキップ')).toBeInTheDocument();
     expect(screen.getByLabelText('リセット')).toBeInTheDocument();
+  });
+
+  it('タイマー実行中にセットとラウンドが表示される', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('スタート'));
+    });
+
+    expect(screen.getByText('セット 1 / 1')).toBeInTheDocument();
+    expect(screen.getByText('ラウンド 1 / 8')).toBeInTheDocument();
   });
 
   it('一時停止と再開が動作する', async () => {
@@ -201,6 +215,9 @@ describe('App 統合テスト', () => {
     });
 
     expect(screen.getByText('ワークアウト完了！')).toBeInTheDocument();
+    expect(screen.getByText('実行セット')).toBeInTheDocument();
+    expect(screen.getByText('セット内ラウンド')).toBeInTheDocument();
+    expect(screen.getByText('総ラウンド')).toBeInTheDocument();
     expect(screen.getByText('もう一度')).toBeInTheDocument();
   });
 
@@ -275,14 +292,17 @@ describe('App 統合テスト', () => {
     render(<App />);
 
     const workoutInput = screen.getByLabelText('ワークアウト（秒）');
+    const setsInput = screen.getByLabelText('セット数');
     await act(async () => {
       fireEvent.change(workoutInput, { target: { value: '45' } });
+      fireEvent.change(setsInput, { target: { value: '3' } });
     });
 
     const stored = localStorage.getItem('hiit-timer-config');
     expect(stored).toBeTruthy();
     const parsed = JSON.parse(stored!);
     expect(parsed.workoutSeconds).toBe(45);
+    expect(parsed.sets).toBe(3);
   });
 
   it('localStorage の破損データはデフォルト値にフォールバックする', () => {
@@ -325,25 +345,71 @@ describe('App 統合テスト', () => {
     expect(screen.getByLabelText('再開')).toBeInTheDocument();
   });
 
-  it('フェーズ遷移時にYouTube動画が切り替わる', async () => {
-    const { mockPlayer } = setupGlobalMocks();
+  it('同セット内は曲を継続し、セット間休憩のみ休憩曲へ切り替わる', async () => {
+    const { mockPlayer, triggerPlayerReady } = setupGlobalMocks();
     render(<App />);
 
     const workoutUrl = screen.getByLabelText('ワークアウト曲（YouTube URL）');
+    const restUrl = screen.getByLabelText('休憩曲（YouTube URL）');
+    const workoutInput = screen.getByLabelText('ワークアウト（秒）');
+    const restInput = screen.getByLabelText('休憩（秒）');
+    const setsInput = screen.getByLabelText('セット数');
+    const roundsInput = screen.getByLabelText('ラウンド数');
+    const betweenSetsRestInput = screen.getByLabelText('セット間休憩（秒）');
+
     await act(async () => {
       fireEvent.change(workoutUrl, {
         target: { value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
       });
+      fireEvent.change(restUrl, {
+        target: { value: 'https://www.youtube.com/watch?v=M7FIvfx5J10' },
+      });
+      fireEvent.change(workoutInput, { target: { value: '2' } });
+      fireEvent.change(restInput, { target: { value: '1' } });
+      fireEvent.change(setsInput, { target: { value: '2' } });
+      fireEvent.change(roundsInput, { target: { value: '2' } });
+      fireEvent.change(betweenSetsRestInput, { target: { value: '2' } });
     });
 
     await act(async () => {
       fireEvent.click(screen.getByText('スタート'));
     });
+    await act(async () => {
+      triggerPlayerReady();
+    });
 
-    // loadVideoByIdが呼ばれることを確認（Playerがreadyの場合）
-    // 注意: テスト環境ではPlayerがready前にphaseChangeが呼ばれるため、
-    // loadAndPlayは内部でpendingに保存される
-    // ここでは呼び出し自体の確認はスキップし、エラーが起きないことを確認
-    expect(mockPlayer).toBeDefined();
+    // set1 round1 workout開始
+    expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(1);
+    expect(mockPlayer.loadVideoById).toHaveBeenNthCalledWith(1, 'dQw4w9WgXcQ');
+
+    // set1 round1 rest（同セット内）: 切替なし
+    currentTime += 2000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(1);
+
+    // set1 round2 workout（同セット内）: 切替なし
+    currentTime += 1000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(1);
+
+    // set1終了後のセット間休憩: 休憩曲へ切替
+    currentTime += 2000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(2);
+    expect(mockPlayer.loadVideoById).toHaveBeenNthCalledWith(2, 'M7FIvfx5J10');
+
+    // set2 round1開始: ワークアウト曲へ戻す
+    currentTime += 2000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(mockPlayer.loadVideoById).toHaveBeenCalledTimes(3);
+    expect(mockPlayer.loadVideoById).toHaveBeenNthCalledWith(3, 'dQw4w9WgXcQ');
   });
 });

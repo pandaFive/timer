@@ -6,7 +6,6 @@ import { extractVideoId } from './utils/youtube';
 import { Settings } from './components/Settings';
 import { TimerDisplay } from './components/TimerDisplay';
 import { Controls } from './components/Controls';
-import { YouTubePlayer } from './components/YouTubePlayer';
 import { Summary } from './components/Summary';
 import type { TimerConfig, Phase } from './types';
 
@@ -16,14 +15,8 @@ function App() {
   const configRef = useRef<TimerConfig | null>(null);
   const { speak } = useCountdownVoice();
 
-  const {
-    needsUserGesture,
-    retryPlay,
-    setVolume,
-    loadAndPlay,
-    stop,
-    containerId,
-  } = useYouTubePlayer(YOUTUBE_CONTAINER_ID);
+  const { needsUserGesture, retryPlay, setVolume, loadAndPlay, stop } =
+    useYouTubePlayer(YOUTUBE_CONTAINER_ID);
 
   /** カウントダウン（残り3,2,1秒）コールバック */
   const onCountdownTick = useCallback(
@@ -39,7 +32,7 @@ function App() {
 
   /** フェーズ遷移コールバック */
   const onPhaseChange = useCallback(
-    (phase: Phase) => {
+    (phase: Phase, round: number) => {
       const config = configRef.current;
       if (!config) return;
 
@@ -47,11 +40,18 @@ function App() {
       setVolume(100);
 
       if (phase === 'workout') {
-        const videoId = extractVideoId(config.workoutUrl);
-        if (videoId) loadAndPlay(videoId);
+        // セット開始時のみワークアウト曲に切り替える
+        if (round === 1) {
+          const videoId = extractVideoId(config.workoutUrl);
+          if (videoId) loadAndPlay(videoId);
+        }
       } else if (phase === 'rest') {
-        const videoId = extractVideoId(config.restUrl);
-        if (videoId) loadAndPlay(videoId);
+        // セット間休憩時のみ休憩曲に切り替える
+        const isBetweenSetsRest = round >= config.rounds;
+        if (isBetweenSetsRest) {
+          const videoId = extractVideoId(config.restUrl);
+          if (videoId) loadAndPlay(videoId);
+        }
       } else if (phase === 'completed') {
         stop();
       }
@@ -82,7 +82,7 @@ function App() {
   const isTimerActive = state.phase !== 'idle' && state.phase !== 'completed';
 
   return (
-    <div className="app">
+    <div className="app" translate="no">
       <h1 className="app__title">HIIT インターバルタイマー</h1>
 
       {state.phase === 'idle' && (
@@ -93,8 +93,10 @@ function App() {
         <>
           <TimerDisplay
             phase={state.phase}
+            currentSet={state.currentSet}
+            totalSets={configRef.current?.sets ?? 0}
             currentRound={state.currentRound}
-            totalRounds={configRef.current?.rounds ?? 0}
+            roundsPerSet={configRef.current?.rounds ?? 0}
             timeLeft={state.timeLeft}
           />
           <Controls
@@ -114,12 +116,14 @@ function App() {
         <Summary
           totalWorkoutTime={state.totalWorkoutTime}
           totalRestTime={state.totalRestTime}
-          totalRounds={configRef.current?.rounds ?? 0}
+          totalSets={configRef.current?.sets ?? 0}
+          roundsPerSet={configRef.current?.rounds ?? 0}
+          totalRounds={
+            (configRef.current?.sets ?? 0) * (configRef.current?.rounds ?? 0)
+          }
           onReset={handleReset}
         />
       )}
-
-      <YouTubePlayer containerId={containerId} />
     </div>
   );
 }

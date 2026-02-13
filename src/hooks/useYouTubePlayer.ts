@@ -29,6 +29,19 @@ export interface UseYouTubePlayerReturn {
 /** API読み込みタイムアウト（ミリ秒） */
 const API_LOAD_TIMEOUT_MS = 10_000;
 
+/** プレイヤーコンテナを確保（未存在ならbody直下に作成） */
+function ensurePlayerContainer(containerId: string): HTMLElement {
+  const existing = document.getElementById(containerId);
+  if (existing) return existing;
+
+  const el = document.createElement('div');
+  el.id = containerId;
+  el.className = 'youtube-player';
+  el.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(el);
+  return el;
+}
+
 /**
  * YouTube IFrame APIスクリプトをロードする（シングルトン）。
  * StrictModeの二重マウントや再マウントでも1回のみ実行される。
@@ -100,7 +113,8 @@ export function useYouTubePlayer(containerId: string): UseYouTubePlayerReturn {
         if (destroyed || !window.YT) return;
 
         try {
-          const player = new window.YT.Player(containerId, {
+          const container = ensurePlayerContainer(containerId);
+          const player = new window.YT.Player(container.id, {
             height: '200',
             width: '200',
             events: {

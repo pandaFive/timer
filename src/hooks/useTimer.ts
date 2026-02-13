@@ -22,6 +22,7 @@ interface UseTimerReturn {
 /** タイマーの初期状態 */
 const initialState: TimerState = {
   phase: 'idle',
+  currentSet: 0,
   currentRound: 0,
   timeLeft: 0,
   isRunning: false,
@@ -50,40 +51,94 @@ const initialInternalState: InternalState = {
   phaseStartedAt: null,
 };
 
+/** 休憩フェーズの秒数を算出（通常休憩 or セット間休憩） */
+function getRestDurationSeconds(config: TimerConfig, round: number): number {
+  if (round >= config.rounds) {
+    return config.betweenSetsRestSeconds;
+  }
+  return config.restSeconds;
+}
+
 /**
  * 次のフェーズと状態を計算する。
  * 最終ラウンドのworkout後はrest無しでcompletedに遷移する。
  */
 function computeNextPhase(
   phase: Phase,
+  currentSet: number,
   currentRound: number,
   config: TimerConfig,
-): { nextPhase: Phase; nextRound: number; nextDuration: number } {
+): {
+  nextPhase: Phase;
+  nextSet: number;
+  nextRound: number;
+  nextDuration: number;
+} {
   if (phase === 'workout') {
-    if (currentRound >= config.rounds) {
-      // 最終ラウンドのworkout完了 → completed
+    const isLastRound = currentRound >= config.rounds;
+    const isLastSet = currentSet >= config.sets;
+
+    if (isLastRound && isLastSet) {
+      // 最終セット最終ラウンド完了 → completed
       return {
         nextPhase: 'completed',
+        nextSet: currentSet,
         nextRound: currentRound,
         nextDuration: 0,
       };
     }
+
+    if (isLastRound) {
+      if (config.betweenSetsRestSeconds > 0) {
+        return {
+          nextPhase: 'rest',
+          nextSet: currentSet,
+          nextRound: currentRound,
+          nextDuration: config.betweenSetsRestSeconds,
+        };
+      }
+
+      return {
+        nextPhase: 'workout',
+        nextSet: currentSet + 1,
+        nextRound: 1,
+        nextDuration: config.workoutSeconds,
+      };
+    }
+
     // rest phase
     return {
       nextPhase: 'rest',
+      nextSet: currentSet,
       nextRound: currentRound,
       nextDuration: config.restSeconds,
     };
   }
   if (phase === 'rest') {
-    // 次のラウンドのworkout
+    // セット間休憩の場合は次セット先頭へ
+    if (currentRound >= config.rounds) {
+      return {
+        nextPhase: 'workout',
+        nextSet: currentSet + 1,
+        nextRound: 1,
+        nextDuration: config.workoutSeconds,
+      };
+    }
+
+    // 通常休憩は次ラウンドへ
     return {
       nextPhase: 'workout',
+      nextSet: currentSet,
       nextRound: currentRound + 1,
       nextDuration: config.workoutSeconds,
     };
   }
-  return { nextPhase: 'completed', nextRound: currentRound, nextDuration: 0 };
+  return {
+    nextPhase: 'completed',
+    nextSet: currentSet,
+    nextRound: currentRound,
+    nextDuration: 0,
+  };
 }
 
 /** catch-upアルゴリズム: 経過時間から現在のフェーズ・ラウンド・残り時間を再計算 */
@@ -92,57 +147,69 @@ function catchUp(
   config: TimerConfig,
 ): {
   phase: Phase;
+  set: number;
   round: number;
   timeLeftMs: number;
   totalWorkout: number;
   totalRest: number;
 } {
   let remaining = elapsedMs;
-  let round = 1;
   let totalWorkout = 0;
   let totalRest = 0;
 
-  while (round <= config.rounds) {
-    const workoutMs = config.workoutSeconds * 1000;
-    if (remaining < workoutMs) {
-      // このworkoutフェーズ内
-      totalWorkout += remaining / 1000;
-      return {
-        phase: 'workout',
-        round,
-        timeLeftMs: workoutMs - remaining,
-        totalWorkout,
-        totalRest,
-      };
-    }
-    remaining -= workoutMs;
-    totalWorkout += config.workoutSeconds;
+  for (let set = 1; set <= config.sets; set++) {
+    for (let round = 1; round <= config.rounds; round++) {
+      const workoutMs = config.workoutSeconds * 1000;
+      if (remaining < workoutMs) {
+        // このworkoutフェーズ内
+        totalWorkout += remaining / 1000;
+        return {
+          phase: 'workout',
+          set,
+          round,
+          timeLeftMs: workoutMs - remaining,
+          totalWorkout,
+          totalRest,
+        };
+      }
+      remaining -= workoutMs;
+      totalWorkout += config.workoutSeconds;
 
-    // 最終ラウンドにはrestがない
-    if (round >= config.rounds) {
-      break;
-    }
+      const isLastRound = round >= config.rounds;
+      const isLastSet = set >= config.sets;
+      if (isLastRound && isLastSet) {
+        break;
+      }
 
-    const restMs = config.restSeconds * 1000;
-    if (remaining < restMs) {
-      // このrestフェーズ内
-      totalRest += remaining / 1000;
-      return {
-        phase: 'rest',
-        round,
-        timeLeftMs: restMs - remaining,
-        totalWorkout,
-        totalRest,
-      };
+      const restDurationSeconds = isLastRound
+        ? config.betweenSetsRestSeconds
+        : config.restSeconds;
+      const restMs = restDurationSeconds * 1000;
+      if (restMs <= 0) {
+        continue;
+      }
+
+      if (remaining < restMs) {
+        // このrestフェーズ内
+        totalRest += remaining / 1000;
+        return {
+          phase: 'rest',
+          set,
+          round,
+          timeLeftMs: restMs - remaining,
+          totalWorkout,
+          totalRest,
+        };
+      }
+      remaining -= restMs;
+      totalRest += restDurationSeconds;
     }
-    remaining -= restMs;
-    totalRest += config.restSeconds;
-    round++;
   }
 
   // 全ラウンド超過
   return {
     phase: 'completed',
+    set: config.sets,
     round: config.rounds,
     timeLeftMs: 0,
     totalWorkout,
@@ -162,6 +229,7 @@ function timerReducer(
         ...initialInternalState,
         config: action.config,
         phase: 'workout',
+        currentSet: 1,
         currentRound: 1,
         timeLeft: action.config.workoutSeconds,
         isRunning: true,
@@ -184,7 +252,7 @@ function timerReducer(
         const phaseElapsed =
           state.phase === 'workout'
             ? state.config.workoutSeconds
-            : state.config.restSeconds;
+            : getRestDurationSeconds(state.config, state.currentRound);
         const newElapsed =
           state.elapsedRunningMs + (now - (state.endAt - phaseElapsed * 1000));
 
@@ -195,6 +263,8 @@ function timerReducer(
           return {
             ...state,
             phase: 'completed',
+            currentSet: result.set,
+            currentRound: result.round,
             isRunning: false,
             timeLeft: 0,
             endAt: null,
@@ -211,13 +281,14 @@ function timerReducer(
         const currentPhaseDurationMs =
           (result.phase === 'workout'
             ? state.config.workoutSeconds
-            : state.config.restSeconds) * 1000;
+            : getRestDurationSeconds(state.config, result.round)) * 1000;
         const timeSpentInCurrentPhase =
           currentPhaseDurationMs - result.timeLeftMs;
 
         return {
           ...state,
           phase: result.phase,
+          currentSet: result.set,
           currentRound: result.round,
           timeLeft: Math.ceil(result.timeLeftMs / 1000),
           endAt: newEndAt,
@@ -287,7 +358,7 @@ function timerReducer(
         const phaseDurationMs =
           (state.phase === 'workout'
             ? state.config.workoutSeconds
-            : state.config.restSeconds) * 1000;
+            : getRestDurationSeconds(state.config, state.currentRound)) * 1000;
         elapsedInPhaseMs = state.isRunning
           ? phaseDurationMs - (state.endAt - now)
           : phaseDurationMs - (state.endAt - (state.pausedAt ?? now));
@@ -301,8 +372,9 @@ function timerReducer(
         state.totalRestTime +
         (state.phase === 'rest' ? elapsedInPhaseMs / 1000 : 0);
 
-      const { nextPhase, nextRound, nextDuration } = computeNextPhase(
+      const { nextPhase, nextSet, nextRound, nextDuration } = computeNextPhase(
         state.phase,
+        state.currentSet,
         state.currentRound,
         state.config,
       );
@@ -323,6 +395,7 @@ function timerReducer(
       return {
         ...state,
         phase: nextPhase,
+        currentSet: nextSet,
         currentRound: nextRound,
         timeLeft: nextDuration,
         isRunning: true,
@@ -365,15 +438,18 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
 
   // 前回のフェーズとラウンドを追跡（フェーズ遷移検出用）
   const prevPhaseRef = useRef<Phase>('idle');
+  const prevSetRef = useRef(0);
   const prevRoundRef = useRef(0);
   // カウントダウン重複発火防止
   const lastAnnouncedRef = useRef(0);
 
   // フェーズ遷移時のコールバック発火
-  const { phase, currentRound, timeLeft, isRunning } = internalState;
+  const { phase, currentSet, currentRound, timeLeft, isRunning } =
+    internalState;
   useEffect(() => {
     if (
       phase !== prevPhaseRef.current ||
+      currentSet !== prevSetRef.current ||
       currentRound !== prevRoundRef.current
     ) {
       if (phase !== 'idle' || prevPhaseRef.current !== 'idle') {
@@ -382,9 +458,10 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
       // フェーズ変更時にカウントダウン状態をリセット
       lastAnnouncedRef.current = 0;
       prevPhaseRef.current = phase;
+      prevSetRef.current = currentSet;
       prevRoundRef.current = currentRound;
     }
-  }, [phase, currentRound]);
+  }, [phase, currentSet, currentRound]);
 
   // カウントダウンコールバック発火
   useEffect(() => {
@@ -436,6 +513,7 @@ export function useTimer(options: UseTimerOptions = {}): UseTimerReturn {
   // 外部公開用の状態（内部詳細を隠蔽）
   const state: TimerState = {
     phase: internalState.phase,
+    currentSet: internalState.currentSet,
     currentRound: internalState.currentRound,
     timeLeft: internalState.timeLeft,
     isRunning: internalState.isRunning,

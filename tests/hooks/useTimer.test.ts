@@ -7,6 +7,8 @@ const defaultConfig: TimerConfig = {
   workoutSeconds: 10,
   restSeconds: 5,
   rounds: 3,
+  sets: 1,
+  betweenSetsRestSeconds: 0,
   workoutUrl: '',
   restUrl: '',
 };
@@ -38,6 +40,7 @@ describe('useTimer', () => {
       );
       expect(result.current.state.phase).toBe('idle');
       expect(result.current.state.isRunning).toBe(false);
+      expect(result.current.state.currentSet).toBe(0);
       expect(result.current.state.currentRound).toBe(0);
       expect(result.current.state.timeLeft).toBe(0);
     });
@@ -52,6 +55,7 @@ describe('useTimer', () => {
       act(() => result.current.start(defaultConfig));
 
       expect(result.current.state.phase).toBe('workout');
+      expect(result.current.state.currentSet).toBe(1);
       expect(result.current.state.currentRound).toBe(1);
       expect(result.current.state.timeLeft).toBe(10);
       expect(result.current.state.isRunning).toBe(true);
@@ -484,6 +488,7 @@ describe('useTimer', () => {
       });
 
       expect(result.current.state.currentRound).toBe(5);
+      expect(result.current.state.currentSet).toBe(1);
       expect(result.current.state.phase).toBe('workout');
       expect(result.current.state.timeLeft).toBe(10);
     });
@@ -591,6 +596,73 @@ describe('useTimer', () => {
       act(() => result.current.start(defaultConfig));
       expect(result.current.state.phase).toBe('workout');
       expect(result.current.state.totalWorkoutTime).toBe(0);
+    });
+  });
+
+  // --- セット遷移 ---
+  describe('セット遷移', () => {
+    it('セット間休憩がある場合、最終ラウンド後にセット間休憩へ遷移する', () => {
+      const config: TimerConfig = {
+        ...defaultConfig,
+        rounds: 2,
+        sets: 2,
+        betweenSetsRestSeconds: 7,
+      };
+      const { result } = renderHook(() =>
+        useTimer({ onCountdownTick, onPhaseChange }),
+      );
+      act(() => result.current.start(config));
+      onPhaseChange.mockClear();
+
+      // set1: round1(w10+r5) + round2(w10) = 25秒
+      currentTime += 25000;
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(result.current.state.phase).toBe('rest');
+      expect(result.current.state.currentSet).toBe(1);
+      expect(result.current.state.currentRound).toBe(2);
+      expect(result.current.state.timeLeft).toBe(7);
+      expect(onPhaseChange).toHaveBeenCalledWith('rest', 2);
+
+      // セット間休憩完了で次セット先頭ラウンドへ
+      currentTime += 7000;
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(result.current.state.phase).toBe('workout');
+      expect(result.current.state.currentSet).toBe(2);
+      expect(result.current.state.currentRound).toBe(1);
+      expect(result.current.state.timeLeft).toBe(10);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1);
+    });
+
+    it('セット間休憩が0秒の場合、最終ラウンド後に即次セットへ遷移する', () => {
+      const config: TimerConfig = {
+        ...defaultConfig,
+        rounds: 1,
+        sets: 2,
+        betweenSetsRestSeconds: 0,
+      };
+      const { result } = renderHook(() =>
+        useTimer({ onCountdownTick, onPhaseChange }),
+      );
+      act(() => result.current.start(config));
+      onPhaseChange.mockClear();
+
+      // set1 round1 workout完了
+      currentTime += 10000;
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(result.current.state.phase).toBe('workout');
+      expect(result.current.state.currentSet).toBe(2);
+      expect(result.current.state.currentRound).toBe(1);
+      expect(result.current.state.timeLeft).toBe(10);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 1);
     });
   });
 });
