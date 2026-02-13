@@ -2,6 +2,9 @@
 
 ## Recently Completed (2026-02-13)
 
+- [x] 設定プリセット保存（最大3件）と下書き自動保存を分離
+  - ファイル: `src/components/Settings.tsx`, `src/types.ts`, `src/App.css`, `tests/integration/App.test.tsx`, `README.md`
+  - 内容: `hiit-timer-draft`（自動保存）と `hiit-timer-presets`（名前付き3件）を追加。保存/読込/削除UI、旧`hiit-timer-config`からの互換移行、統合テストを実装
 - [x] `useCountdownVoice` のセクション案内失敗耐性を強化
   - ファイル: `src/hooks/useCountdownVoice.ts`, `tests/hooks/useCountdownVoice.test.ts`
   - 内容: `speakSectionStart` に `onerror` と `try-catch` を追加。型エクスポート、英語音声フォールバック、失敗系テストを拡充

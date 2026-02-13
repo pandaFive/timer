@@ -19,6 +19,20 @@ export interface TimerConfig {
   restUrl: string;
 }
 
+/** 保存済み設定プリセット */
+export interface TimerPreset {
+  id: string;
+  name: string;
+  config: TimerConfig;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** プリセット保存ストア */
+export interface PresetStore {
+  presets: TimerPreset[];
+}
+
 /** タイマー状態 */
 export interface TimerState {
   phase: Phase;

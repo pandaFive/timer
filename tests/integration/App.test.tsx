@@ -327,7 +327,7 @@ describe('App 統合テスト', () => {
     ).toBeInTheDocument();
   });
 
-  it('localStorage に設定が保存される', async () => {
+  it('下書き設定が localStorage に自動保存される', async () => {
     setupGlobalMocks();
     render(<App />);
 
@@ -338,11 +338,143 @@ describe('App 統合テスト', () => {
       fireEvent.change(setsInput, { target: { value: '3' } });
     });
 
-    const stored = localStorage.getItem('hiit-timer-config');
+    const stored = localStorage.getItem('hiit-timer-draft');
     expect(stored).toBeTruthy();
     const parsed = JSON.parse(stored!);
     expect(parsed.workoutSeconds).toBe(45);
     expect(parsed.sets).toBe(3);
+  });
+
+  it('プリセットを保存できる', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const nameInput = screen.getByLabelText('プリセット名');
+    const workoutInput = screen.getByLabelText('ワークアウト（秒）');
+
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: '朝トレ' } });
+      fireEvent.change(workoutInput, { target: { value: '42' } });
+      fireEvent.click(screen.getByText('保存'));
+    });
+
+    expect(screen.getByText('プリセットを保存しました')).toBeInTheDocument();
+
+    const stored = localStorage.getItem('hiit-timer-presets');
+    expect(stored).toBeTruthy();
+    const parsed = JSON.parse(stored!);
+    expect(parsed.presets).toHaveLength(1);
+    expect(parsed.presets[0].name).toBe('朝トレ');
+    expect(parsed.presets[0].config.workoutSeconds).toBe(42);
+  });
+
+  it('プリセットを読み込みできる', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const nameInput = screen.getByLabelText('プリセット名');
+    const workoutInput = screen.getByLabelText(
+      'ワークアウト（秒）',
+    ) as HTMLInputElement;
+    const select = screen.getByLabelText('保存済み設定') as HTMLSelectElement;
+
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: '夜トレ' } });
+      fireEvent.change(workoutInput, { target: { value: '50' } });
+      fireEvent.click(screen.getByText('保存'));
+    });
+
+    await act(async () => {
+      fireEvent.change(workoutInput, { target: { value: '25' } });
+    });
+    expect(workoutInput.value).toBe('25');
+
+    const stored = JSON.parse(localStorage.getItem('hiit-timer-presets')!);
+    const presetId = stored.presets[0].id;
+    await act(async () => {
+      fireEvent.change(select, { target: { value: presetId } });
+      fireEvent.click(screen.getByText('読込'));
+    });
+
+    expect(workoutInput.value).toBe('50');
+    expect(screen.getByText('プリセットを読み込みました')).toBeInTheDocument();
+  });
+
+  it('プリセットを削除できる', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const nameInput = screen.getByLabelText('プリセット名');
+    const select = screen.getByLabelText('保存済み設定') as HTMLSelectElement;
+
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: '削除用' } });
+      fireEvent.click(screen.getByText('保存'));
+    });
+
+    const storedBeforeDelete = JSON.parse(
+      localStorage.getItem('hiit-timer-presets')!,
+    );
+    const presetId = storedBeforeDelete.presets[0].id;
+    await act(async () => {
+      fireEvent.change(select, { target: { value: presetId } });
+      fireEvent.click(screen.getByText('削除'));
+    });
+
+    const storedAfterDelete = JSON.parse(
+      localStorage.getItem('hiit-timer-presets')!,
+    );
+    expect(storedAfterDelete.presets).toHaveLength(0);
+    expect(screen.getByText('プリセットを削除しました')).toBeInTheDocument();
+  });
+
+  it('プリセットは3件を超えて保存できない', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const nameInput = screen.getByLabelText('プリセット名');
+
+    for (const name of ['A', 'B', 'C']) {
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: name } });
+        fireEvent.click(screen.getByText('保存'));
+      });
+    }
+
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: 'D' } });
+      fireEvent.click(screen.getByText('保存'));
+    });
+
+    expect(
+      screen.getByText(
+        'プリセットは3件までです。保存済み設定を削除してから保存してください',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('旧設定キーをプリセットへ互換移行する', () => {
+    localStorage.setItem(
+      'hiit-timer-config',
+      JSON.stringify({
+        workoutSeconds: 44,
+        restSeconds: 11,
+        sets: 2,
+        rounds: 5,
+        betweenSetsRestSeconds: 15,
+        workoutUrl: '',
+        restUrl: '',
+      }),
+    );
+    setupGlobalMocks();
+    render(<App />);
+
+    const stored = localStorage.getItem('hiit-timer-presets');
+    expect(stored).toBeTruthy();
+    const parsed = JSON.parse(stored!);
+    expect(parsed.presets).toHaveLength(1);
+    expect(parsed.presets[0].name).toBe('既存設定');
+    expect(parsed.presets[0].config.workoutSeconds).toBe(44);
   });
 
   it('localStorage の破損データはデフォルト値にフォールバックする', () => {

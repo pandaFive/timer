@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TimerConfig } from '../types';
+import type { PresetStore, TimerConfig, TimerPreset } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 import { extractVideoId } from '../utils/youtube';
 
-const STORAGE_KEY = 'hiit-timer-config';
+const LEGACY_STORAGE_KEY = 'hiit-timer-config';
+const DRAFT_STORAGE_KEY = 'hiit-timer-draft';
+const PRESETS_STORAGE_KEY = 'hiit-timer-presets';
+const MAX_PRESETS = 3;
+const SAVE_STATUS_DURATION_MS = 2000;
 
 /** バリデーションエラー */
 interface ValidationErrors {
@@ -16,68 +20,178 @@ interface ValidationErrors {
   restUrl?: string;
 }
 
-/** localStorageから設定を復元（破損データはデフォルト値にフォールバック） */
-function loadConfig(): TimerConfig {
+/** 数値フィールドの安全な復元（NaN/Infinity/範囲外はフォールバック） */
+function safeInt(
+  val: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  return typeof val === 'number' &&
+    Number.isFinite(val) &&
+    val >= min &&
+    val <= max
+    ? Math.round(val)
+    : fallback;
+}
+
+/** 不正値をフォールバックしながら設定を復元 */
+function normalizeConfig(
+  value: unknown,
+  fallback: TimerConfig = DEFAULT_CONFIG,
+): TimerConfig {
+  if (!value || typeof value !== 'object') return fallback;
+
+  const obj = value as Record<string, unknown>;
+  return {
+    workoutSeconds: safeInt(
+      obj.workoutSeconds,
+      1,
+      600,
+      fallback.workoutSeconds,
+    ),
+    restSeconds: safeInt(obj.restSeconds, 1, 600, fallback.restSeconds),
+    sets: safeInt(obj.sets, 1, 99, fallback.sets),
+    rounds: safeInt(obj.rounds, 1, 99, fallback.rounds),
+    betweenSetsRestSeconds: safeInt(
+      obj.betweenSetsRestSeconds,
+      0,
+      600,
+      fallback.betweenSetsRestSeconds,
+    ),
+    workoutUrl:
+      typeof obj.workoutUrl === 'string' ? obj.workoutUrl : fallback.workoutUrl,
+    restUrl: typeof obj.restUrl === 'string' ? obj.restUrl : fallback.restUrl,
+  };
+}
+
+/** 旧単一設定の有効値のみを厳格に復元 */
+function loadLegacyConfig(): TimerConfig | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_CONFIG;
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return null;
 
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return DEFAULT_CONFIG;
-
-    const obj = parsed as Record<string, unknown>;
-
-    /** 数値フィールドの安全な復元（NaN/Infinity/範囲外はデフォルト値） */
-    const safeInt = (
-      val: unknown,
-      min: number,
-      max: number,
-      fallback: number,
-    ): number =>
-      typeof val === 'number' &&
-      Number.isFinite(val) &&
-      val >= min &&
-      val <= max
-        ? Math.round(val)
-        : fallback;
-
-    const config: TimerConfig = {
-      workoutSeconds: safeInt(
-        obj.workoutSeconds,
-        1,
-        600,
-        DEFAULT_CONFIG.workoutSeconds,
-      ),
-      restSeconds: safeInt(obj.restSeconds, 1, 600, DEFAULT_CONFIG.restSeconds),
-      sets: safeInt(obj.sets, 1, 99, DEFAULT_CONFIG.sets),
-      rounds: safeInt(obj.rounds, 1, 99, DEFAULT_CONFIG.rounds),
-      betweenSetsRestSeconds: safeInt(
-        obj.betweenSetsRestSeconds,
-        0,
-        600,
-        DEFAULT_CONFIG.betweenSetsRestSeconds,
-      ),
-      workoutUrl:
-        typeof obj.workoutUrl === 'string'
-          ? obj.workoutUrl
-          : DEFAULT_CONFIG.workoutUrl,
-      restUrl:
-        typeof obj.restUrl === 'string' ? obj.restUrl : DEFAULT_CONFIG.restUrl,
-    };
-
-    return config;
+    const config = normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG);
+    const errors = validate(config);
+    return Object.keys(errors).length === 0 ? config : null;
   } catch (e) {
-    console.warn('localStorage設定の読み込みに失敗しました:', e);
-    return DEFAULT_CONFIG;
+    console.warn('旧設定の読み込みに失敗しました:', e);
+    return null;
   }
 }
 
-/** 設定をlocalStorageに保存 */
-function saveConfig(config: TimerConfig): void {
+/** 下書き設定をlocalStorageから復元 */
+function loadDraftConfig(): TimerConfig {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return loadLegacyConfig() ?? DEFAULT_CONFIG;
+
+    return normalizeConfig(JSON.parse(raw), DEFAULT_CONFIG);
   } catch (e) {
-    console.warn('localStorage設定の保存に失敗しました:', e);
+    console.warn('下書き設定の読み込みに失敗しました:', e);
+    return loadLegacyConfig() ?? DEFAULT_CONFIG;
+  }
+}
+
+/** プリセット配列をlocalStorageから復元 */
+function loadPresets(): TimerPreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return [];
+
+    const store = parsed as { presets?: unknown };
+    if (!Array.isArray(store.presets)) return [];
+
+    const nameSet = new Set<string>();
+    const result: TimerPreset[] = [];
+
+    for (const preset of store.presets) {
+      if (result.length >= MAX_PRESETS) break;
+      if (!preset || typeof preset !== 'object') continue;
+
+      const obj = preset as Record<string, unknown>;
+      if (
+        typeof obj.id !== 'string' ||
+        typeof obj.name !== 'string' ||
+        typeof obj.createdAt !== 'number' ||
+        typeof obj.updatedAt !== 'number'
+      ) {
+        continue;
+      }
+
+      const name = obj.name.trim();
+      if (name.length < 1 || name.length > 30) continue;
+      const normalizedName = name.toLowerCase();
+      if (nameSet.has(normalizedName)) continue;
+
+      const config = normalizeConfig(obj.config, DEFAULT_CONFIG);
+      if (Object.keys(validate(config)).length > 0) continue;
+
+      nameSet.add(normalizedName);
+      result.push({
+        id: obj.id,
+        name,
+        config,
+        createdAt: obj.createdAt,
+        updatedAt: obj.updatedAt,
+      });
+    }
+
+    return result;
+  } catch (e) {
+    console.warn('プリセットの読み込みに失敗しました:', e);
+    return [];
+  }
+}
+
+/** 下書き設定をlocalStorageに保存 */
+function saveDraftConfig(config: TimerConfig): void {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.warn('下書き設定の保存に失敗しました:', e);
+  }
+}
+
+/** プリセット配列をlocalStorageに保存 */
+function savePresets(presets: TimerPreset[]): void {
+  try {
+    const store: PresetStore = { presets };
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(store));
+  } catch (e) {
+    console.warn('プリセットの保存に失敗しました:', e);
+  }
+}
+
+/** 旧単一設定をプリセット形式へ互換移行 */
+function migrateLegacyConfig(): void {
+  try {
+    if (localStorage.getItem(PRESETS_STORAGE_KEY)) return;
+
+    const legacyConfig = loadLegacyConfig();
+    if (!legacyConfig) {
+      savePresets([]);
+      return;
+    }
+
+    const now = Date.now();
+    const preset: TimerPreset = {
+      id: `legacy-${now}`,
+      name: '既存設定',
+      config: legacyConfig,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    savePresets([preset]);
+    if (!localStorage.getItem(DRAFT_STORAGE_KEY)) {
+      saveDraftConfig(legacyConfig);
+    }
+  } catch (e) {
+    console.warn('旧設定の移行に失敗しました:', e);
   }
 }
 
@@ -126,22 +240,63 @@ function validate(config: TimerConfig): ValidationErrors {
   return errors;
 }
 
+/** プリセット名のバリデーション */
+function validatePresetName(
+  name: string,
+  presets: TimerPreset[],
+): string | null {
+  const trimmed = name.trim();
+  if (trimmed.length < 1) return 'プリセット名を入力してください';
+  if (trimmed.length > 30) return 'プリセット名は30文字以内で入力してください';
+
+  const normalizedName = trimmed.toLowerCase();
+  const duplicated = presets.some(
+    (preset) => preset.name.toLowerCase() === normalizedName,
+  );
+  if (duplicated) return '同名のプリセットが既に存在します';
+
+  return null;
+}
+
 interface SettingsProps {
   disabled: boolean;
   onStart: (config: TimerConfig) => void;
 }
 
 export function Settings({ disabled, onStart }: SettingsProps) {
-  const [config, setConfig] = useState<TimerConfig>(loadConfig);
+  const [config, setConfig] = useState<TimerConfig>(() => {
+    migrateLegacyConfig();
+    return loadDraftConfig();
+  });
+  const [presets, setPresets] = useState<TimerPreset[]>(() => {
+    migrateLegacyConfig();
+    return loadPresets();
+  });
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [presetName, setPresetName] = useState('');
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetError, setPresetError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
-  // 設定変更時に自動保存
+  // 下書き設定の自動保存
   useEffect(() => {
-    saveConfig(config);
+    saveDraftConfig(config);
   }, [config]);
+
+  // ステータスメッセージを一定時間で消す
+  useEffect(() => {
+    if (!statusMessage) return;
+    const timeoutId = window.setTimeout(
+      () => setStatusMessage(''),
+      SAVE_STATUS_DURATION_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [statusMessage]);
 
   const handleChange = useCallback(
     (field: keyof TimerConfig, value: string) => {
+      setStatusMessage('');
+      setPresetError('');
       setConfig((prev) => {
         const numFields = [
           'workoutSeconds',
@@ -171,6 +326,91 @@ export function Settings({ disabled, onStart }: SettingsProps) {
     },
     [config, onStart],
   );
+
+  const handleSavePreset = useCallback(() => {
+    const validationErrors = validate(config);
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
+      setPresetError('入力エラーを修正してから保存してください');
+      setStatusMessage('');
+      return;
+    }
+
+    const nameError = validatePresetName(presetName, presets);
+    if (nameError) {
+      setPresetError(nameError);
+      setStatusMessage('');
+      return;
+    }
+
+    if (presets.length >= MAX_PRESETS) {
+      setPresetError(
+        'プリセットは3件までです。保存済み設定を削除してから保存してください',
+      );
+      setStatusMessage('');
+      return;
+    }
+
+    const now = Date.now();
+    const newPreset: TimerPreset = {
+      id: `preset-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      name: presetName.trim(),
+      config,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const nextPresets = [...presets, newPreset];
+
+    setPresets(nextPresets);
+    savePresets(nextPresets);
+    setSelectedPresetId(newPreset.id);
+    setPresetName('');
+    setPresetError('');
+    setStatusMessage('プリセットを保存しました');
+  }, [config, presetName, presets]);
+
+  const handleLoadPreset = useCallback(() => {
+    if (!selectedPresetId) {
+      setPresetError('読み込むプリセットを選択してください');
+      setStatusMessage('');
+      return;
+    }
+
+    const preset = presets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      setPresetError('選択したプリセットが見つかりません');
+      setStatusMessage('');
+      return;
+    }
+
+    setConfig(preset.config);
+    setErrors({});
+    setPresetError('');
+    setStatusMessage('プリセットを読み込みました');
+  }, [presets, selectedPresetId]);
+
+  const handleDeletePreset = useCallback(() => {
+    if (!selectedPresetId) {
+      setPresetError('削除するプリセットを選択してください');
+      setStatusMessage('');
+      return;
+    }
+
+    const nextPresets = presets.filter(
+      (preset) => preset.id !== selectedPresetId,
+    );
+    if (nextPresets.length === presets.length) {
+      setPresetError('選択したプリセットが見つかりません');
+      setStatusMessage('');
+      return;
+    }
+
+    setPresets(nextPresets);
+    savePresets(nextPresets);
+    setSelectedPresetId('');
+    setPresetError('');
+    setStatusMessage('プリセットを削除しました');
+  }, [presets, selectedPresetId]);
 
   return (
     <form className="settings" onSubmit={handleSubmit}>
@@ -306,9 +546,98 @@ export function Settings({ disabled, onStart }: SettingsProps) {
         </div>
       </div>
 
-      <button type="submit" disabled={disabled} className="settings__start-btn">
-        スタート
-      </button>
+      <div className="settings__field-group">
+        <div className="settings__field">
+          <label htmlFor="presetName">プリセット名</label>
+          <input
+            id="presetName"
+            type="text"
+            maxLength={30}
+            value={presetName}
+            onChange={(e) => {
+              setPresetName(e.target.value);
+              setPresetError('');
+              setStatusMessage('');
+            }}
+            disabled={disabled}
+            placeholder="例: 朝トレメニュー"
+          />
+        </div>
+
+        <div className="settings__field">
+          <label htmlFor="savedPreset">保存済み設定</label>
+          <select
+            id="savedPreset"
+            value={selectedPresetId}
+            onChange={(e) => {
+              setSelectedPresetId(e.target.value);
+              setPresetError('');
+              setStatusMessage('');
+            }}
+            disabled={disabled || presets.length === 0}
+            className="settings__select"
+          >
+            <option value="">選択してください</option>
+            {presets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="settings__actions settings__actions--compact">
+          <button
+            type="button"
+            onClick={handleLoadPreset}
+            disabled={disabled || !selectedPresetId}
+            className="settings__secondary-btn"
+          >
+            読込
+          </button>
+          <button
+            type="button"
+            onClick={handleDeletePreset}
+            disabled={disabled || !selectedPresetId}
+            className="settings__danger-btn"
+          >
+            削除
+          </button>
+        </div>
+      </div>
+
+      {(presetError || statusMessage) && (
+        <div className="settings__field">
+          {presetError && (
+            <span className="settings__error" role="alert">
+              {presetError}
+            </span>
+          )}
+          {statusMessage && (
+            <span className="settings__status" role="status">
+              {statusMessage}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="settings__actions">
+        <button
+          type="button"
+          disabled={disabled}
+          className="settings__save-btn"
+          onClick={handleSavePreset}
+        >
+          保存
+        </button>
+        <button
+          type="submit"
+          disabled={disabled}
+          className="settings__start-btn"
+        >
+          スタート
+        </button>
+      </div>
     </form>
   );
 }
