@@ -17,6 +17,15 @@ function setupGlobalMocks() {
   };
 
   let onReadyCallback: (() => void) | undefined;
+  const utteranceInstances: {
+    text: string;
+    lang: string;
+    voice: SpeechSynthesisVoice | null;
+    onerror: ((e: Event) => void) | null;
+    rate: number;
+    pitch: number;
+    volume: number;
+  }[] = [];
 
   vi.stubGlobal('YT', {
     Player: vi.fn(
@@ -46,12 +55,19 @@ function setupGlobalMocks() {
 
   vi.stubGlobal(
     'SpeechSynthesisUtterance',
-    vi.fn((text: string) => ({
-      text,
-      lang: '',
-      voice: null,
-      onerror: null,
-    })),
+    vi.fn((text: string) => {
+      const instance = {
+        text,
+        lang: '',
+        voice: null as SpeechSynthesisVoice | null,
+        onerror: null as ((e: Event) => void) | null,
+        rate: 1,
+        pitch: 1,
+        volume: 1,
+      };
+      utteranceInstances.push(instance);
+      return instance;
+    }),
   );
 
   // AudioContext モック
@@ -80,6 +96,7 @@ function setupGlobalMocks() {
   return {
     mockPlayer,
     triggerPlayerReady: () => onReadyCallback?.(),
+    utteranceInstances,
   };
 }
 
@@ -343,6 +360,80 @@ describe('App 統合テスト', () => {
 
     // 一時停止される
     expect(screen.getByLabelText('再開')).toBeInTheDocument();
+  });
+
+  it('フェーズ遷移ごとに開始案内を読み上げる', async () => {
+    const { utteranceInstances } = setupGlobalMocks();
+    render(<App />);
+
+    const workoutInput = screen.getByLabelText('ワークアウト（秒）');
+    const restInput = screen.getByLabelText('休憩（秒）');
+    const setsInput = screen.getByLabelText('セット数');
+    const roundsInput = screen.getByLabelText('ラウンド数');
+    const betweenSetsRestInput = screen.getByLabelText('セット間休憩（秒）');
+
+    await act(async () => {
+      fireEvent.change(workoutInput, { target: { value: '4' } });
+      fireEvent.change(restInput, { target: { value: '1' } });
+      fireEvent.change(setsInput, { target: { value: '2' } });
+      fireEvent.change(roundsInput, { target: { value: '2' } });
+      fireEvent.change(betweenSetsRestInput, { target: { value: '2' } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('スタート'));
+    });
+
+    currentTime += 4000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    currentTime += 1000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    currentTime += 4000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    currentTime += 2000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    currentTime += 4000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    currentTime += 1000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    currentTime += 4000;
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    const sectionTexts = utteranceInstances
+      .map((utterance) => utterance.text)
+      .filter((text) => !['1', '2', '3'].includes(text));
+
+    expect(sectionTexts).toEqual([
+      'Workout',
+      'Rest',
+      'Workout',
+      'Between sets rest',
+      'Workout',
+      'Rest',
+      'Workout',
+      'Completed',
+    ]);
+    expect(screen.getByText('ワークアウト完了！')).toBeInTheDocument();
   });
 
   it('同セット内は曲を継続し、セット間休憩のみ休憩曲へ切り替わる', async () => {

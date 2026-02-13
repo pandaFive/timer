@@ -28,7 +28,7 @@
 
 ## High Priority — 巨大な修正（レビュー日: 2026-02-13）
 
-- [ ] `onPhaseChange` コールバックに `set` パラメータを追加
+- [x] `onPhaseChange` コールバックに `set` パラメータを追加（完了: 2026-02-13）
   - ファイル: `src/hooks/useTimer.ts`, `src/types.ts`, `src/App.tsx`, テストファイル
   - 影響範囲: useTimer API、App.tsx の音楽切り替えロジック、全テスト
   - 修正方針: `onPhaseChange(phase, round)` → `onPhaseChange(phase, set, round)` に変更。App.tsx で `round >= config.rounds` による推論を `set` パラメータ直接参照に置換

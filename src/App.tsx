@@ -13,7 +13,7 @@ const YOUTUBE_CONTAINER_ID = 'yt-player';
 
 function App() {
   const configRef = useRef<TimerConfig | null>(null);
-  const { speak } = useCountdownVoice();
+  const { speakCountdown, speakSectionStart } = useCountdownVoice();
 
   const { needsUserGesture, retryPlay, setVolume, loadAndPlay, stop } =
     useYouTubePlayer(YOUTUBE_CONTAINER_ID);
@@ -21,23 +21,31 @@ function App() {
   /** カウントダウン（残り3,2,1秒）コールバック */
   const onCountdownTick = useCallback(
     (secondsLeft: 3 | 2 | 1) => {
-      speak(secondsLeft);
+      speakCountdown(secondsLeft);
       // 音楽の音量を下げる
       if (secondsLeft === 3) {
         setVolume(30);
       }
     },
-    [speak, setVolume],
+    [speakCountdown, setVolume],
   );
 
   /** フェーズ遷移コールバック */
   const onPhaseChange = useCallback(
-    (phase: Phase, round: number) => {
+    (phase: Phase, set: number, round: number) => {
       const config = configRef.current;
       if (!config) return;
 
       // 音量を元に戻す
       setVolume(100);
+
+      const isBetweenSetsRest =
+        phase === 'rest' && set < config.sets && round === config.rounds;
+
+      speakSectionStart({
+        phase,
+        isBetweenSetsRest,
+      });
 
       if (phase === 'workout') {
         // セット開始時のみワークアウト曲に切り替える
@@ -47,7 +55,6 @@ function App() {
         }
       } else if (phase === 'rest') {
         // セット間休憩時のみ休憩曲に切り替える
-        const isBetweenSetsRest = round >= config.rounds;
         if (isBetweenSetsRest) {
           const videoId = extractVideoId(config.restUrl);
           if (videoId) loadAndPlay(videoId);
@@ -56,7 +63,7 @@ function App() {
         stop();
       }
     },
-    [setVolume, loadAndPlay, stop],
+    [setVolume, speakSectionStart, loadAndPlay, stop],
   );
 
   const { state, start, pause, resume, skip, reset } = useTimer({
