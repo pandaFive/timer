@@ -2,6 +2,18 @@
 
 ## Recently Completed (2026-02-13)
 
+- [x] presets破損時のlegacy救済移行を追加
+  - ファイル: `src/components/Settings.tsx`, `tests/integration/App.test.tsx`
+  - 内容: `hiit-timer-presets` が存在しても読み取り不能なら移行完了扱いしないよう修正。legacy設定を再移行してデータ喪失を防止
+- [x] 初期化耐障害性と警告ライフサイクルを改善
+  - ファイル: `src/components/Settings.tsx`, `tests/integration/App.test.tsx`
+  - 内容: `loadInitialState` の予期しない例外をフォールバック処理化。プリセット保存成功時に `storageWarning` をクリアする挙動を追加し、回帰テストを拡充
+- [x] プリセット保存の信頼性と移行安全性を改善（PRレビュー対応）
+  - ファイル: `src/components/Settings.tsx`, `src/types.ts`, `src/App.css`, `tests/integration/App.test.tsx`
+  - 内容: localStorage書き込み失敗のユーザー通知、移行処理の冪等化と旧キー削除、参照共有回避、プリセット名サニタイズ、不足テスト9件+失敗系テストを追加
+- [x] 設定プリセット保存（最大3件）と下書き自動保存を分離
+  - ファイル: `src/components/Settings.tsx`, `src/types.ts`, `src/App.css`, `tests/integration/App.test.tsx`, `README.md`
+  - 内容: `hiit-timer-draft`（自動保存）と `hiit-timer-presets`（名前付き3件）を追加。保存/読込/削除UI、旧`hiit-timer-config`からの互換移行、統合テストを実装
 - [x] `useCountdownVoice` のセクション案内失敗耐性を強化
   - ファイル: `src/hooks/useCountdownVoice.ts`, `tests/hooks/useCountdownVoice.test.ts`
   - 内容: `speakSectionStart` に `onerror` と `try-catch` を追加。型エクスポート、英語音声フォールバック、失敗系テストを拡充

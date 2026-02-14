@@ -19,6 +19,18 @@ export interface TimerConfig {
   restUrl: string;
 }
 
+/** 保存済み設定プリセット */
+export interface TimerPreset {
+  /** 一意ID */
+  readonly id: string;
+  /** 表示名（1〜30文字、制御文字を除去した値） */
+  readonly name: string;
+  /** 保存時点の設定スナップショット */
+  readonly config: Readonly<TimerConfig>;
+  /** 作成日時（UNIXミリ秒） */
+  readonly createdAt: number;
+}
+
 /** タイマー状態 */
 export interface TimerState {
   phase: Phase;
