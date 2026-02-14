@@ -306,6 +306,30 @@ describe('App 統合テスト', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 
+  it('sets と betweenSetsRestSeconds の境界外入力でバリデーションエラーが表示される', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const setsInput = screen.getByLabelText('セット数');
+    const betweenSetsRestInput = screen.getByLabelText('セット間休憩（秒）');
+    await act(async () => {
+      fireEvent.change(setsInput, { target: { value: '0' } });
+      fireEvent.change(betweenSetsRestInput, { target: { value: '-1' } });
+    });
+
+    const form = screen.getByText('スタート').closest('form')!;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+
+    expect(
+      screen.getByText('1〜99の整数を入力してください'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('0〜600の整数を入力してください'),
+    ).toBeInTheDocument();
+  });
+
   it('不正なYouTube URLでバリデーションエラーが表示される', async () => {
     setupGlobalMocks();
     render(<App />);
@@ -343,6 +367,31 @@ describe('App 統合テスト', () => {
     const parsed = JSON.parse(stored!);
     expect(parsed.workoutSeconds).toBe(45);
     expect(parsed.sets).toBe(3);
+  });
+
+  it('betweenSetsRestSeconds の下書き値が保存され再マウント後に復元される', async () => {
+    setupGlobalMocks();
+    const { unmount } = render(<App />);
+
+    const betweenSetsRestInput = screen.getByLabelText(
+      'セット間休憩（秒）',
+    ) as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(betweenSetsRestInput, { target: { value: '123' } });
+    });
+
+    const stored = localStorage.getItem('hiit-timer-draft');
+    expect(stored).toBeTruthy();
+    const parsed = JSON.parse(stored!);
+    expect(parsed.betweenSetsRestSeconds).toBe(123);
+
+    unmount();
+    render(<App />);
+
+    const restoredBetweenSetsRestInput = screen.getByLabelText(
+      'セット間休憩（秒）',
+    ) as HTMLInputElement;
+    expect(restoredBetweenSetsRestInput.value).toBe('123');
   });
 
   it('プリセットを保存できる', async () => {

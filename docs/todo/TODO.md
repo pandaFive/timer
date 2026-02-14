@@ -1,5 +1,11 @@
 # TODO
 
+## Recently Completed (2026-02-14)
+
+- [x] セット関連遷移のテストカバレッジを拡充（High Priority項目）
+  - ファイル: `tests/hooks/useTimer.test.ts`, `tests/integration/App.test.tsx`
+  - 内容: セット境界のSKIP/RESET/バックグラウンド復帰、複数セット完走、セット間休憩統計、`sets`/`betweenSetsRestSeconds` の境界値、`betweenSetsRestSeconds` の保存復元を追加検証
+
 ## Recently Completed (2026-02-13)
 
 - [x] presets破損時のlegacy救済移行を追加
@@ -55,7 +61,7 @@
   - 修正方針: `onPhaseChange(phase, round)` → `onPhaseChange(phase, set, round)` に変更。App.tsx で `round >= config.rounds` による推論を `set` パラメータ直接参照に置換
   - 理由: 現在 App.tsx がラウンド番号からセット間休憩かどうかを推論しており脆弱。APIシグネチャ変更は複数ファイルに影響
 
-- [ ] テストカバレッジ追加（セット関連の遷移パス）
+- [x] テストカバレッジ追加（セット関連の遷移パス）（完了: 2026-02-14）
   - ファイル: `tests/hooks/useTimer.test.ts`, `tests/integration/App.test.tsx`
   - 影響範囲: テストのみ（プロダクションコード変更なし）
   - 追加すべきテスト:
