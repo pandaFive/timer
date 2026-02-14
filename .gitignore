@@ -5,3 +5,11 @@ dist
 .env
 .env.*
 !.env.example
+
+# ツール設定
+.playwright-mcp/
+.serena/
+
+# 一時ファイル
+docs/plans/
+*.png
