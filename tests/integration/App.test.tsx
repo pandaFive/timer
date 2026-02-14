@@ -330,6 +330,30 @@ describe('App 統合テスト', () => {
     ).toBeInTheDocument();
   });
 
+  it('sets と betweenSetsRestSeconds の上限超過入力でバリデーションエラーが表示される', async () => {
+    setupGlobalMocks();
+    render(<App />);
+
+    const setsInput = screen.getByLabelText('セット数');
+    const betweenSetsRestInput = screen.getByLabelText('セット間休憩（秒）');
+    await act(async () => {
+      fireEvent.change(setsInput, { target: { value: '100' } });
+      fireEvent.change(betweenSetsRestInput, { target: { value: '601' } });
+    });
+
+    const form = screen.getByText('スタート').closest('form')!;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+
+    expect(
+      screen.getByText('1〜99の整数を入力してください'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('0〜600の整数を入力してください'),
+    ).toBeInTheDocument();
+  });
+
   it('不正なYouTube URLでバリデーションエラーが表示される', async () => {
     setupGlobalMocks();
     render(<App />);

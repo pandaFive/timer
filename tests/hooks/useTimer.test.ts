@@ -178,7 +178,7 @@ describe('useTimer', () => {
       act(() => result.current.start(config));
       onPhaseChange.mockClear();
 
-      // set1: r1(w2+r1) + r2(w2+between3), set2: r1(w2+r1) + r2(w2) = 13秒
+      // set1: round1(w2+rest1) + round2(w2+between3), set2: round1(w2+rest1) + round2(w2) = 13秒
       currentTime += 13000;
       act(() => {
         vi.advanceTimersByTime(200);
@@ -406,7 +406,7 @@ describe('useTimer', () => {
       );
       act(() => result.current.start(config));
 
-      // set1 round2 workout開始位置へ
+      // set1: round1(w10+rest5) = 15秒 → set1 round2 workout開始位置
       currentTime += 15000;
       act(() => {
         vi.advanceTimersByTime(200);
@@ -419,6 +419,7 @@ describe('useTimer', () => {
       expect(result.current.state.currentSet).toBe(1);
       expect(result.current.state.currentRound).toBe(2);
       expect(result.current.state.timeLeft).toBe(7);
+      expect(result.current.state.isRunning).toBe(true);
       expect(onPhaseChange).toHaveBeenCalledWith('rest', 1, 2);
     });
 
@@ -477,7 +478,73 @@ describe('useTimer', () => {
       expect(result.current.state.currentSet).toBe(2);
       expect(result.current.state.currentRound).toBe(1);
       expect(result.current.state.timeLeft).toBe(10);
+      expect(result.current.state.isRunning).toBe(true);
       expect(onPhaseChange).toHaveBeenCalledWith('workout', 2, 1);
+    });
+
+    it('PAUSE中にセット間休憩をスキップすると次セットworkoutに遷移しisRunningがtrueになる', () => {
+      const config: TimerConfig = {
+        ...defaultConfig,
+        rounds: 2,
+        sets: 2,
+        betweenSetsRestSeconds: 7,
+      };
+      const { result } = renderHook(() =>
+        useTimer({ onCountdownTick, onPhaseChange }),
+      );
+      act(() => result.current.start(config));
+
+      // set1: round1(w10+rest5) + round2(w10) = 25秒 → セット間休憩
+      currentTime += 25000;
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // PAUSE → SKIP
+      act(() => result.current.pause());
+      expect(result.current.state.isRunning).toBe(false);
+      onPhaseChange.mockClear();
+
+      act(() => result.current.skip());
+
+      expect(result.current.state.phase).toBe('workout');
+      expect(result.current.state.currentSet).toBe(2);
+      expect(result.current.state.currentRound).toBe(1);
+      expect(result.current.state.timeLeft).toBe(10);
+      expect(result.current.state.isRunning).toBe(true);
+      expect(onPhaseChange).toHaveBeenCalledWith('workout', 2, 1);
+    });
+
+    it('PAUSE中に最終ラウンドworkoutをスキップするとセット間休憩に遷移する', () => {
+      const config: TimerConfig = {
+        ...defaultConfig,
+        rounds: 2,
+        sets: 2,
+        betweenSetsRestSeconds: 7,
+      };
+      const { result } = renderHook(() =>
+        useTimer({ onCountdownTick, onPhaseChange }),
+      );
+      act(() => result.current.start(config));
+
+      // set1: round1(w10+rest5) = 15秒 → set1 round2 workout開始位置
+      currentTime += 15000;
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // PAUSE → SKIP
+      act(() => result.current.pause());
+      onPhaseChange.mockClear();
+
+      act(() => result.current.skip());
+
+      expect(result.current.state.phase).toBe('rest');
+      expect(result.current.state.currentSet).toBe(1);
+      expect(result.current.state.currentRound).toBe(2);
+      expect(result.current.state.timeLeft).toBe(7);
+      expect(result.current.state.isRunning).toBe(true);
+      expect(onPhaseChange).toHaveBeenCalledWith('rest', 1, 2);
     });
 
     it('セット間休憩0秒の最終ラウンドworkoutスキップで即次セットへ遷移する', () => {
@@ -499,6 +566,7 @@ describe('useTimer', () => {
       expect(result.current.state.currentSet).toBe(2);
       expect(result.current.state.currentRound).toBe(1);
       expect(result.current.state.timeLeft).toBe(10);
+      expect(result.current.state.isRunning).toBe(true);
       expect(onPhaseChange).toHaveBeenCalledWith('workout', 2, 1);
     });
   });
@@ -532,13 +600,14 @@ describe('useTimer', () => {
         ...defaultConfig,
         rounds: 1,
         sets: 2,
+        betweenSetsRestSeconds: 0,
       };
       const { result } = renderHook(() =>
         useTimer({ onCountdownTick, onPhaseChange }),
       );
       act(() => result.current.start(config));
 
-      // set1 workout完了でset2 workoutへ
+      // set1 round1 workout完了 → betweenSetsRestSeconds=0のためset2 workoutへ直接遷移
       currentTime += 10000;
       act(() => {
         vi.advanceTimersByTime(200);
@@ -608,7 +677,7 @@ describe('useTimer', () => {
       );
       act(() => result.current.start(config));
 
-      // set1: r1(w2+r1) + r2(w2+between3), set2: r1(w2+r1) + r2(w2) = 13秒
+      // set1: round1(w2+rest1) + round2(w2+between3), set2: round1(w2+rest1) + round2(w2) = 13秒
       currentTime += 13000;
       act(() => {
         vi.advanceTimersByTime(200);
@@ -616,7 +685,7 @@ describe('useTimer', () => {
 
       expect(result.current.state.phase).toBe('completed');
       expect(result.current.state.totalWorkoutTime).toBe(8);
-      expect(result.current.state.totalRestTime).toBe(5); // 1 + 3 + 1
+      expect(result.current.state.totalRestTime).toBe(5); // rest1 + between3 + rest1
     });
   });
 
@@ -686,7 +755,7 @@ describe('useTimer', () => {
       act(() => result.current.start(config));
       onPhaseChange.mockClear();
 
-      // set1: r1(w4+r2) + r2(w4+between3) = 13秒 → set2 round1 workout開始
+      // set1: round1(w4+rest2) + round2(w4+between3) = 13秒 → set2 round1 workout開始
       currentTime += 13000;
       act(() => {
         vi.advanceTimersByTime(200);
@@ -697,6 +766,34 @@ describe('useTimer', () => {
       expect(result.current.state.currentRound).toBe(1);
       expect(result.current.state.timeLeft).toBe(4);
       expect(onPhaseChange).toHaveBeenCalledWith('workout', 2, 1);
+    });
+
+    it('バックグラウンド復帰でセット間休憩の途中に着地する', () => {
+      const config: TimerConfig = {
+        ...defaultConfig,
+        workoutSeconds: 4,
+        restSeconds: 2,
+        rounds: 2,
+        sets: 2,
+        betweenSetsRestSeconds: 6,
+      };
+      const { result } = renderHook(() =>
+        useTimer({ onCountdownTick, onPhaseChange }),
+      );
+      act(() => result.current.start(config));
+      onPhaseChange.mockClear();
+
+      // set1: round1(w4+rest2) + round2(w4) = 10秒 → セット間休憩開始、+2秒 = 12秒（休憩途中、残り4秒）
+      currentTime += 12000;
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(result.current.state.phase).toBe('rest');
+      expect(result.current.state.currentSet).toBe(1);
+      expect(result.current.state.currentRound).toBe(2);
+      expect(result.current.state.timeLeft).toBe(4);
+      expect(result.current.state.isRunning).toBe(true);
     });
 
     it('PAUSE中にバックグラウンドでも状態が変わらない', () => {
